@@ -257,6 +257,8 @@ body {
   pointer-events: none;
 }
 
+/* 枠線はフェードインのみ（拡大しない）。マス・枠線のサイズは常に固定し、
+   「拡大して見える」演出は内側のcell-char（文字）だけが担う。 */
 .cell-hit-flash::after {
   animation: hit-stamp 0.5s ease-out;
 }
@@ -264,11 +266,9 @@ body {
 @keyframes hit-stamp {
   from {
     opacity: 0;
-    transform: scale(1.4);
   }
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
@@ -278,6 +278,8 @@ body {
    「勢い」を表現している。どの文字同士が組み合わさって成立したかは、
    対象の文字すべてが同時にポップすることで直感的に把握できる。 */
 .cell-pop {
+  position: relative;
+  z-index: 2;
   animation: cell-pop-scale 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
     cell-pop-blur 0.42s ease-out;
 }
