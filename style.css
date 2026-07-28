@@ -64,6 +64,21 @@ body {
   max-width: 720px;
 }
 
+/*
+  #appはbodyの直接のflex子要素であり、これまで幅指定がなかったため、
+  内容（特に太字化する文字など）のサイズにわずかでも変化があると
+  flexアイテムとしての算出幅自体が再計算され、盤面全体が「ズーム」した
+  ように見えるレイアウト不具合の原因になっていた。
+  #appにwidthを明示することで、.jukugo-slotのwidth:100%が常に
+  定まった値を基準に解決されるようにし、内部の文字装飾等の変化が
+  盤面のサイズに一切影響しないようにする。
+*/
+#app {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 /* ---------- ヘッダー ---------- */
 
 .header {
@@ -533,6 +548,30 @@ body {
   font-weight: 600;
   font-size: 1.1rem;
   color: #e0b13a;
+}
+
+/* コンボ数に応じた3段階の強弱。数が大きいほどサイズ・発光を強める */
+.combo-banner-mid {
+  padding: 18px 44px;
+  border-width: 2px;
+  box-shadow: 0 0 18px 3px rgba(166, 56, 44, 0.35);
+}
+
+.combo-banner-mid .combo-banner-n {
+  font-size: 2.1rem;
+}
+
+.combo-banner-high {
+  padding: 22px 52px;
+  border-width: 2.5px;
+  border-color: #e0b13a;
+  box-shadow: 0 0 28px 6px rgba(224, 177, 58, 0.5);
+}
+
+.combo-banner-high .combo-banner-n {
+  font-size: 2.6rem;
+  color: #e0b13a;
+  text-shadow: 0 0 10px rgba(224, 177, 58, 0.6);
 }
 
 @keyframes combo-banner-pop {

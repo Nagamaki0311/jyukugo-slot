@@ -67,6 +67,20 @@ const REPLAY_ADJACENT_ACCEPTANCE_RATE = 0.03;
  * RandomEngineによる完全均等ランダム抽選のみで更新される（補正・重み付け一切なし）。
  * GameBalanceEngine.js自体は将来の再利用に備えてファイルとしては残しているが、
  * このGameEngineからは呼び出していない。
+ *
+ * 【コンボ判定について】
+ * コンボは「1回の判定タイミングで同時に成立した語数」ではなく、
+ * 「熟語の成立が連鎖しているかどうか」で数える。具体的には、新しく成立した
+ * 熟語が、直前までに成立した熟語のマスと1文字でも共有・隣接して連鎖している
+ * 場合はコンボを継続（+1）し、まったく無関係な場所で新規に成立した場合は
+ * コンボを1から数え直す。例:
+ *   「国語」成立(1コンボ) → 隣接して「国家」成立(2コンボ、"国"を共有)
+ *   → 隣接して「国分」成立(3コンボ、"国"を共有)
+ *   → 既に成立済みの「分」「家」が連鎖して「分家」成立(4コンボ)
+ * この連鎖の集合を_comboChainCellsとして保持し、新しい成立がこの集合内の
+ * マスと重なるかどうかで連鎖の継続・切断を判定する。
+ * なお、score(n)のスコア計算式（1回の判定タイミングでの同時成立数nに基づく
+ * コンボボーナス）はこの「コンボ」とは別の既存の仕組みであり、変更していない。
  */
 export class GameEngine {
   /**
@@ -89,6 +103,8 @@ export class GameEngine {
     this._spinResults = [];
     this.spinScore = 0;
     this.maxComboThisSpin = 0;
+    this.comboCount = 0;
+    this._comboChainCells = new Set();
     this.spinTier = "base";
     this.isReplaySpin = false;
     this._pendingReplays = 0;
@@ -143,6 +159,7 @@ export class GameEngine {
     }
 
     this._rollSpinTier();
+    this.judgeEngine.reset();
 
     const nextChar = () => this.randomEngine.next();
     this.reelEngine.reset(now, nextChar);
@@ -151,6 +168,8 @@ export class GameEngine {
     this._spinResults = [];
     this.spinScore = 0;
     this.maxComboThisSpin = 0;
+    this.comboCount = 0;
+    this._comboChainCells = new Set();
     this.replayCountThisSpin = 0;
     this._cellWordMap = new Map();
 
@@ -200,15 +219,37 @@ export class GameEngine {
     );
 
     let replayTriggered = false;
+    let comboIncreasedThisTick = false;
 
     if (n > 0) {
       this.totalScore += score;
       this.spinScore += score;
       this._spinResults.push(...results);
-      if (n > this.maxComboThisSpin) {
-        this.maxComboThisSpin = n;
-      }
       this._recordCellWords(results);
+
+      // コンボ判定（連鎖ベース）:
+      // 直前までに成立した熟語のマスと文字（マス）を共有している場合は
+      // コンボを継続（+1）。共有していない場合は新しい連鎖として1から数え直す。
+      for (const r of results) {
+        const connected =
+          this._comboChainCells.size === 0 ||
+          this._comboChainCells.has(r.a) ||
+          this._comboChainCells.has(r.b);
+
+        if (connected) {
+          this.comboCount += 1;
+        } else {
+          this.comboCount = 1;
+          this._comboChainCells.clear();
+        }
+        this._comboChainCells.add(r.a);
+        this._comboChainCells.add(r.b);
+        comboIncreasedThisTick = true;
+      }
+
+      if (this.comboCount > this.maxComboThisSpin) {
+        this.maxComboThisSpin = this.comboCount;
+      }
 
       // リプレイ条件(a): 畳語（同じ漢字2字）の成立
       for (const r of results) {
@@ -230,7 +271,14 @@ export class GameEngine {
     }
 
     if (n === 0 && !replayTriggered) return null;
-    return { results, score, n, replayTriggered };
+    return {
+      results,
+      score,
+      n,
+      replayTriggered,
+      comboCount: this.comboCount,
+      comboIncreased: comboIncreasedThisTick,
+    };
   }
 
   /**
@@ -314,6 +362,7 @@ export class GameEngine {
       spinResults: this._spinResults,
       spinning: this.spinning,
       maxComboThisSpin: this.maxComboThisSpin,
+      comboCount: this.comboCount,
       money: this.money,
       lastMoneyGain: this._lastMoneyGain,
       sessionScore: this.sessionScore,

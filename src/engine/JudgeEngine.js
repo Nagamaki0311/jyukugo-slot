@@ -13,6 +13,24 @@
  * （次回別の組み合わせで再度自然に一致・抽選するチャンスがある）。
  * RandomEngine（文字そのものの抽選）とは独立した、別レイヤーの抽選である。
  *
+ * 【判定対象の絞り込み方式について（重要な修正）】
+ * 以前は「両マスとも固定済みのペアはスキップ」「今回いずれのマスも変化して
+ * いなければスキップ」という2つの条件で判定対象を絞り込んでいた。しかし
+ * この方式では、「別々のペアで個別に固定された2マスが、その2マス自身の
+ * 組み合わせでも新しい熟語を成立させる」ケース（例:「国家」の"家"と
+ * 「国分」の"分"が別々に固定された後、隣接する"分"と"家"がそれ自体で
+ * 「分家」を成立させる連鎖）を検出できないという不具合があった
+ * （固定済み同士のペアは無条件でスキップされてしまうため）。
+ *
+ * これを修正するため、絞り込みの基準を「マスが変化したかどうか」から
+ * 「そのペアの一致状態が直前の評価から変化したかどうか」に変更した。
+ * _lastMatchState にペアごとの直前の一致語（またはnull）を保持し、
+ * 今回の一致語がそれと異なる場合のみ「新規の一致」とみなして抽選対象にする。
+ * これにより、両端が固定済みであっても、そのペア自体を初めて評価する
+ * タイミング（あるいは一致状態が変わったタイミング）では正しく判定される。
+ * 一度成立して固定されたペアは _confirmedPairs に記録し、二度と再評価・
+ * 再抽選しない（重複成立の防止）。
+ *
  * スコア計算: 1回のevaluate()呼び出しで新規に成立した語数をnとし、
  * score(n) = 100 * (2^n - 1) とする（Phase1で確定した仕様。
  * n=1→100, n=2→300, n=3→700, n=4→1500, ...）。
@@ -27,6 +45,8 @@ export class JudgeEngine {
     this._linePairs = linePairs;
     this._acceptanceRate =
       options.acceptanceRate == null ? 1.0 : options.acceptanceRate;
+    this._lastMatchState = new Map(); // pairKey -> 直前に一致していた語（またはnull）
+    this._confirmedPairs = new Set(); // 既に成立確定したpairKeyの集合
   }
 
   /**
@@ -39,26 +59,29 @@ export class JudgeEngine {
   }
 
   /**
+   * スピン開始時に呼び出し、ペア単位の状態をすべてリセットする。
+   */
+  reset() {
+    this._lastMatchState.clear();
+    this._confirmedPairs.clear();
+  }
+
+  /**
    * @param {import("./ReelEngine.js").ReelEngine} reelEngine
    * @param {import("./DictionaryEngine.js").DictionaryEngine} dictionaryEngine
    * @returns {{results: Array<{type:string,a:number,b:number,word:string,reading:string}>, score: number, n: number}}
    */
   evaluate(reelEngine, dictionaryEngine) {
     const grid = reelEngine.getGrid();
-    const fixedFlags = reelEngine.getFixedFlags();
-    const changedIndices = reelEngine.getChangedIndices();
 
     const results = [];
 
     for (const pair of this._linePairs) {
       const { a, b } = pair;
+      const pairKey = `${a},${b}`;
 
-      // 既に両マスとも固定済み（＝このペアは以前のフレームで確定済み）はスキップ
-      if (fixedFlags[a] && fixedFlags[b]) continue;
-
-      // どちらのマスも今回変化していなければ、既に判定・抽選済みの組み合わせが
-      // そのまま残っているだけなので、再度の判定・抽選は行わない
-      if (!changedIndices.has(a) && !changedIndices.has(b)) continue;
+      // 既に成立確定済みのペアは二度と評価しない
+      if (this._confirmedPairs.has(pairKey)) continue;
 
       const charA = grid[a];
       const charB = grid[b];
@@ -66,11 +89,20 @@ export class JudgeEngine {
 
       const word = charA + charB;
       const entry = dictionaryEngine.getEntry(word);
-      if (!entry) continue;
+      const currentMatch = entry ? word : null;
+
+      const previousMatch = this._lastMatchState.get(pairKey) ?? null;
+      this._lastMatchState.set(pairKey, currentMatch);
+
+      if (!currentMatch) continue;
+      // 直前の評価から一致状態が変わっていなければ、既に判定・抽選済みの
+      // 組み合わせがそのまま残っているだけなので、再度の抽選は行わない
+      if (currentMatch === previousMatch) continue;
 
       // 受理抽選：辞書に一致していても、この確率を外れた場合は成立させない
       if (Math.random() >= this._acceptanceRate) continue;
 
+      this._confirmedPairs.add(pairKey);
       results.push({
         type: pair.type,
         a,

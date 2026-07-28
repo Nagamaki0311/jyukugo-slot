@@ -82,9 +82,8 @@ export class UIEngine {
         </div>
 
         <div class="stats-panel">
-          <span>総プレイ回数: <span data-role="total-play-count">0</span></span>
+          <span>スピン回数: <span data-role="total-play-count">0</span></span>
           <span>最高コンボ: <span data-role="max-combo">0</span></span>
-          <span>累計獲得熟語数: <span data-role="total-words-found">0</span></span>
         </div>
 
         <div class="debug-panel" data-role="debug-panel" hidden>
@@ -101,7 +100,7 @@ export class UIEngine {
               <div><dt>最終スコア</dt><dd data-role="result-final-score">0</dd></div>
               <div><dt>最終所持金</dt><dd data-role="result-final-money">0円</dd></div>
               <div><dt>最大コンボ</dt><dd data-role="result-max-combo">0</dd></div>
-              <div><dt>プレイ回数</dt><dd data-role="result-play-count">0</dd></div>
+              <div><dt>スピン回数</dt><dd data-role="result-play-count">0</dd></div>
             </dl>
             <button class="result-replay-button" data-role="result-replay-button">もう一度プレイ</button>
           </div>
@@ -283,14 +282,17 @@ export class UIEngine {
   }
 
   /**
-   * @param {{results: Array<{a:number,b:number,word:string, reading:string, type:string}>, score:number, n:number}} hit
+   * @param {{results: Array<{a:number,b:number,word:string, reading:string, type:string}>, score:number, n:number, comboCount:number, comboIncreased:boolean}} hit
    */
   onHit(hit) {
     this.audioEngine.play("hit");
     this.animationEngine.playHit(hit.results.flatMap((r) => [r.a, r.b]));
     this.animationEngine.playScorePopup(hit.results, hit.score);
-    if (hit.n >= 2) {
-      this.animationEngine.playComboBanner(hit.n, hit.score);
+
+    // コンボ演出は「熟語の成立が連鎖しているか」で数えるcomboCountを使う。
+    // 1コンボ（連鎖の起点となる最初の1語）では演出を出さず、2コンボ以上から表示する。
+    if (hit.comboIncreased && hit.comboCount >= 2) {
+      this.animationEngine.playComboBanner(hit.comboCount, hit.score);
     }
 
     const list = this.root.querySelector('[data-role="result-list"]');
@@ -308,15 +310,15 @@ export class UIEngine {
   /**
    * @param {{totalPlayCount:number, maxCombo:number, totalWordsFound:number}} data
    */
-  renderStats(data) {
+  /**
+   * @param {{sessionPlayCount:number, sessionMaxCombo:number}} state GameEngineのセッション状態
+   */
+  renderStats(state) {
     this.root.querySelector('[data-role="total-play-count"]').textContent = String(
-      data.totalPlayCount
+      state.sessionPlayCount
     );
     this.root.querySelector('[data-role="max-combo"]').textContent = String(
-      data.maxCombo
-    );
-    this.root.querySelector('[data-role="total-words-found"]').textContent = String(
-      data.totalWordsFound
+      state.sessionMaxCombo
     );
   }
 

@@ -150,17 +150,26 @@ export class AnimationEngine {
    * @param {number} n 同時成立数
    * @param {number} scoreGained このコンボで得たスコア
    */
-  playComboBanner(n, scoreGained) {
-    if (!this._bannerLayerEl || n < 2) return;
+  /**
+   * コンボ（連鎖ベースのcomboCountが2以上）専用の演出。通常のヒットより目立たせる。
+   * コンボ数が大きいほど演出の強弱（サイズ・色・画面揺れ）を強める。
+   * @param {number} comboCount 連鎖ベースの現在のコンボ数（2以上のときのみ呼び出される）
+   * @param {number} scoreGained このtickで得たスコア
+   */
+  playComboBanner(comboCount, scoreGained) {
+    if (!this._bannerLayerEl || comboCount < 2) return;
+
+    // コンボ数に応じた強弱の段階（3段階）
+    const tier = comboCount >= 8 ? "high" : comboCount >= 5 ? "mid" : "low";
 
     const banner = document.createElement("div");
-    banner.className = "combo-banner";
-    banner.innerHTML = `<span class="combo-banner-n">${n}連鎖</span><span class="combo-banner-score">+${scoreGained}</span>`;
+    banner.className = `combo-banner combo-banner-${tier}`;
+    banner.innerHTML = `<span class="combo-banner-n">${comboCount}連鎖</span><span class="combo-banner-score">+${scoreGained}</span>`;
 
     this._bannerLayerEl.appendChild(banner);
     setTimeout(() => banner.remove(), 900);
 
-    this._shakeGrid("strong");
+    this._shakeGrid(tier === "low" ? "light" : "strong");
   }
 
   /**

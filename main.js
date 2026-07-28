@@ -33,7 +33,7 @@ async function main() {
   });
 
   uiEngine.setDebugVisible(saveData.settings.debug);
-  uiEngine.renderStats(saveData);
+  uiEngine.renderStats(gameEngine.getState());
   uiEngine.render(gameEngine.getState());
 
   // 動作確認・デバッグ用のフック（ゲームプレイ自体には影響しない）
@@ -119,12 +119,15 @@ async function main() {
       spinning = false;
 
       const finalState = gameEngine.getState();
-      const updated = recordSpinResult({
+      // LocalStorageへの累計保存は今後の活用に備えて継続するが、
+      // 画面上の「スピン回数」「最高コンボ」はこのゲーム（セッション）中の
+      // 値のみを表示するため、統計表示にはfinalStateを使う。
+      recordSpinResult({
         spinScore: finalState.spinScore,
         spinWordCount: finalState.spinResults.length,
         maxComboThisSpin: finalState.maxComboThisSpin,
       });
-      uiEngine.renderStats(updated);
+      uiEngine.renderStats(finalState);
       uiEngine.appendDebugLog(
         `スピン終了: ${finalState.spinResults.length}語成立 / ${finalState.spinScore}点 / 所持金${finalState.money}円` +
           (finalState.pendingReplays > 0 ? ` / リプレイ残り${finalState.pendingReplays}回` : "")
@@ -148,6 +151,7 @@ async function main() {
     uiEngine.hideResultOverlay();
     uiEngine.clearResultList();
     uiEngine.render(gameEngine.getState());
+    uiEngine.renderStats(gameEngine.getState());
     uiEngine.setSpinButtonEnabled(true);
   });
   uiEngine.setSpinButtonEnabled(true);
