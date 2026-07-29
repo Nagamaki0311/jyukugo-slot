@@ -5,12 +5,14 @@
  * リールr（0,1,2）は列 2r・2r+1 を占有する。
  * セルインデックス = row * 6 + col（0〜29）。
  *
- * 種別ごとの対象（Phase3の成立頻度検証後、Waysを削除しシンプル化した仕様）:
+ * 種別ごとの対象:
  *   - horizontal（横）: 同一リール内、同じ行の列(2r, 2r+1)
  *   - vertical（縦）  : 同一リール内、同じ列の隣接行(i, i+1)
  *   - diagonal（斜め）: 同一リール内、隣接行×隣接列の2方向
+ *   - edge（端役）    : 隣接するリール同士の境界をまたぐ、同じ行の列
+ *                       （左列⇔中央列、中央列⇔右列）。通常役の50%スコア。
  *
- * 合計: 横15 + 縦24 + 斜め24 = 63ペア
+ * 合計: 横15 + 縦24 + 斜め24 + 端役10 = 73ペア
  */
 
 const ROWS = 5;
@@ -73,6 +75,20 @@ export function buildLinePairs() {
         type: "diagonal",
         a: cellIndex(row, colRight),
         b: cellIndex(row + 1, colLeft),
+      });
+    }
+  }
+
+  // 端役（10ペア）: 隣接するリール境界をまたぐ、同じ行同士
+  // （リールrの右列とリールr+1の左列）。通常役の50%スコアで扱う。
+  for (let boundary = 0; boundary < REEL_COUNT - 1; boundary++) {
+    const rightColOfLeftReel = 2 * boundary + 1;
+    const leftColOfRightReel = 2 * boundary + 2;
+    for (let row = 0; row < ROWS; row++) {
+      pairs.push({
+        type: "edge",
+        a: cellIndex(row, rightColOfLeftReel),
+        b: cellIndex(row, leftColOfRightReel),
       });
     }
   }

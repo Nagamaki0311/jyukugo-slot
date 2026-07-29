@@ -76,19 +76,27 @@ export class AnimationEngine {
     this._shakeGrid("light");
   }
 
-  _spawnShockwave(index) {
+  /**
+   * @param {number} index
+   * @param {"normal"|"replay"} [variant]
+   */
+  _spawnShockwave(index, variant = "normal") {
     if (!this._effectLayerEl) return;
     const { x, y } = cellCenterPercent(index);
 
     const ring = document.createElement("div");
-    ring.className = "shockwave-ring";
+    ring.className = variant === "replay" ? "shockwave-ring shockwave-ring-replay" : "shockwave-ring";
     ring.style.left = `${x}%`;
     ring.style.top = `${y}%`;
     this._effectLayerEl.appendChild(ring);
     setTimeout(() => ring.remove(), 500);
   }
 
-  _spawnParticles(index) {
+  /**
+   * @param {number} index
+   * @param {"normal"|"replay"} [variant]
+   */
+  _spawnParticles(index, variant = "normal") {
     if (!this._effectLayerEl) return;
     const { x, y } = cellCenterPercent(index);
 
@@ -99,7 +107,7 @@ export class AnimationEngine {
       const dy = Math.sin(angle) * distance;
 
       const particle = document.createElement("div");
-      particle.className = "hit-particle";
+      particle.className = variant === "replay" ? "hit-particle hit-particle-replay" : "hit-particle";
       particle.style.left = `${x}%`;
       particle.style.top = `${y}%`;
       particle.style.setProperty("--dx", `${dx}px`);
@@ -173,15 +181,52 @@ export class AnimationEngine {
   }
 
   /**
-   * リプレイ成立時の専用演出。コンボバナーとは異なる、分かりやすい
-   * 「REPLAY」表示を出す。
+   * リプレイ成立箇所を、通常の成立と同様に強調表示する（ゴールド系の専用配色）。
+   * 対象マスは金色の枠・発光で固定表示され、パーティクル・衝撃波も金色になる。
+   * @param {number[]} indices リプレイ成立に関与したマスのindex（重複可）
    */
-  playReplayBanner() {
+  playReplayHighlight(indices) {
+    const uniqueIndices = [...new Set(indices)];
+    for (const index of uniqueIndices) {
+      const cellEl = this._getCellElement(index);
+      const charEl = this._getCharElement(index);
+      if (cellEl) {
+        cellEl.classList.add("cell-fixed", "cell-replay");
+        cellEl.classList.add("cell-replay-flash");
+        setTimeout(() => cellEl.classList.remove("cell-replay-flash"), 550);
+      }
+      if (charEl) {
+        charEl.classList.remove("cell-changing", "cell-pop", "cell-replay-pop");
+        void charEl.offsetWidth;
+        charEl.classList.add("cell-replay-pop");
+      }
+
+      this._spawnShockwave(index, "replay");
+      this._spawnParticles(index, "replay");
+    }
+  }
+
+  /**
+   * リプレイ成立時の専用演出。コンボバナーとは異なる、分かりやすい
+   * 「REPLAY」表示を出す。成立箇所の中心付近（indicesがあれば）に表示することで、
+   * 「この組み合わせで成立した」ことが直感的に分かるようにする。
+   * @param {number[]} [indices] リプレイ成立に関与したマスのindex（省略時は画面中央）
+   */
+  playReplayBanner(indices) {
     if (!this._bannerLayerEl) return;
 
     const banner = document.createElement("div");
     banner.className = "replay-banner";
     banner.innerHTML = `<span class="replay-banner-text">REPLAY</span><span class="replay-banner-sub">もう一度スピン！</span>`;
+
+    if (indices && indices.length > 0) {
+      const points = indices.map((i) => cellCenterPercent(i));
+      const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+      const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+      banner.classList.add("replay-banner-positioned");
+      banner.style.left = `${cx}%`;
+      banner.style.top = `${cy}%`;
+    }
 
     this._bannerLayerEl.appendChild(banner);
     setTimeout(() => banner.remove(), 1100);
@@ -198,10 +243,10 @@ export class AnimationEngine {
       const cellEl = this._getCellElement(i);
       const charEl = this._getCharElement(i);
       if (cellEl) {
-        cellEl.classList.remove("cell-fixed", "cell-hit-flash");
+        cellEl.classList.remove("cell-fixed", "cell-hit-flash", "cell-replay", "cell-replay-flash");
       }
       if (charEl) {
-        charEl.classList.remove("cell-changing", "cell-pop");
+        charEl.classList.remove("cell-changing", "cell-pop", "cell-replay-pop");
       }
     }
     if (this._effectLayerEl) {

@@ -8,12 +8,17 @@ const SPIN_DURATION_MS = 4000;
 
 // 所持金システム関連の定数
 const INITIAL_MONEY = 500; // 初期所持金(円)
-const SPIN_COST = 30; // 1スピンの消費額(円)
-// スコア→金額の換算レート。セッション継続スピン数（初期500円が尽きるまでの
-// スピン回数）をシミュレーションして決定した。0.08（100点=8円）で
-// 平均31.3回・範囲23〜39回（60セッション試行）となることを確認済み
-// （test/verify_money_rate.js）。リプレイ導入後も大枠は変えていない。
-const SCORE_TO_MONEY_RATE = 0.08;
+// 1スピンの消費額(円)。以前は30円だったが、所持金が減りにくくゲームが
+// 冗長になっていたため、50円へ引き上げた。
+const SPIN_COST = 50;
+// スコア→金額の換算レート。GameEngine全体を使った統合シミュレーション
+// （実際のゲームループと同じ順序、30セッション×複数回試行）により、
+// SPIN_COST=50円との組み合わせで平均21〜23回・幅広い分散（12〜34回程度）
+// となるレートとして0.10（100点=10円）に調整した。極端に短時間で終わる
+// ことも、長時間続きすぎることもなく、コンボボーナスやリプレイが重なった
+// セッションはより長く遊べるという、狙い通りの分散になることを確認した
+// （test/verify_integration.js）。
+const SCORE_TO_MONEY_RATE = 0.1;
 
 /**
  * 【成立数抽選（3階層）について】
@@ -27,15 +32,17 @@ const SCORE_TO_MONEY_RATE = 0.08;
  *   - boost : 低確率で少し高いレートになり、7〜10個程度の成立を生む
  *   - jackpot: 極低確率で大幅に高いレートになり、演出的な大量成立
  *              （10〜20個超、理論上は最大30近くまで）を生む
- * 2000〜8000回のシミュレーションにより、以下の値で目標分布
- * 「0個:10〜20%、1〜3個:65〜75%、4〜6個:10〜20%、7〜10個:2〜5%、
- * 11個以上:0.02〜0.5%」に収まることを確認した（test/verify_jackpot.js）。
+ * 端役（列またぎの役）を追加したことで判定ペア数が63→73に増え、
+ * 同じレートでは成立数が全体的に増加したため、6000回のシミュレーションで
+ * 再調整した。以下の値で目標分布「0個:11.7%、1〜3個:68.9%、4〜6個:16.4%、
+ * 7〜10個:2.7%、11個以上:0.28%」に収まることを確認した
+ * （test/verify_jackpot.js）。
  */
-const JUDGE_ACCEPTANCE_RATE_BASE = 0.045;
-const JUDGE_ACCEPTANCE_RATE_BOOST = 0.14;
-const JUDGE_BOOST_CHANCE = 0.06;
-const JUDGE_ACCEPTANCE_RATE_JACKPOT = 0.6;
-const JUDGE_JACKPOT_CHANCE = 0.0008;
+const JUDGE_ACCEPTANCE_RATE_BASE = 0.038;
+const JUDGE_ACCEPTANCE_RATE_BOOST = 0.12;
+const JUDGE_BOOST_CHANCE = 0.045;
+const JUDGE_ACCEPTANCE_RATE_JACKPOT = 0.55;
+const JUDGE_JACKPOT_CHANCE = 0.0005;
 
 /**
  * 【リプレイシステムについて】
@@ -220,6 +227,8 @@ export class GameEngine {
 
     let replayTriggered = false;
     let comboIncreasedThisTick = false;
+    let comboBonus = 0;
+    const replayDuplicateWordPairs = [];
 
     if (n > 0) {
       this.totalScore += score;
@@ -230,6 +239,9 @@ export class GameEngine {
       // コンボ判定（連鎖ベース）:
       // 直前までに成立した熟語のマスと文字（マス）を共有している場合は
       // コンボを継続（+1）。共有していない場合は新しい連鎖として1から数え直す。
+      // コンボボーナス: コンボが2以上に進んだ瞬間ごとに、通常スコアとは別に
+      // comboCount×100点を加算する（2コンボ+200, 3コンボ+300, ...）。
+      // 1コンボ（連鎖の起点）や、連鎖が途切れて1から数え直した場合はボーナスなし。
       for (const r of results) {
         const connected =
           this._comboChainCells.size === 0 ||
@@ -245,6 +257,15 @@ export class GameEngine {
         this._comboChainCells.add(r.a);
         this._comboChainCells.add(r.b);
         comboIncreasedThisTick = true;
+
+        if (this.comboCount >= 2) {
+          comboBonus += this.comboCount * 100;
+        }
+      }
+
+      if (comboBonus > 0) {
+        this.totalScore += comboBonus;
+        this.spinScore += comboBonus;
       }
 
       if (this.comboCount > this.maxComboThisSpin) {
@@ -255,14 +276,22 @@ export class GameEngine {
       for (const r of results) {
         if (r.word[0] === r.word[1]) {
           replayTriggered = true;
-          break;
+          replayDuplicateWordPairs.push({ a: r.a, b: r.b, word: r.word });
         }
       }
     }
 
     // リプレイ条件(b): 辞書一致に関わらず、隣接する2マスが同じ漢字
-    if (this._checkAdjacentSameChar()) {
+    // 該当したマスは、通常の熟語成立と同様に見た目上も固定する
+    // （そうしないと直後にランダム更新で文字が変わってしまい、
+    // 「この組み合わせで成立した」ことが分からなくなるため）。
+    const adjacentSameCharPairs = this._checkAdjacentSameChar();
+    if (adjacentSameCharPairs.length > 0) {
       replayTriggered = true;
+      for (const p of adjacentSameCharPairs) {
+        this.reelEngine.fixCell(p.a);
+        this.reelEngine.fixCell(p.b);
+      }
     }
 
     if (replayTriggered) {
@@ -273,9 +302,13 @@ export class GameEngine {
     if (n === 0 && !replayTriggered) return null;
     return {
       results,
-      score,
+      score: score + comboBonus,
+      baseScore: score,
+      comboBonus,
       n,
       replayTriggered,
+      replayAdjacentPairs: adjacentSameCharPairs,
+      replayDuplicateWordPairs,
       comboCount: this.comboCount,
       comboIncreased: comboIncreasedThisTick,
     };
@@ -285,11 +318,13 @@ export class GameEngine {
    * リプレイ条件(b)の判定。辞書判定とは独立に、盤面上で隣接する2マスが
    * 同じ漢字になっている組み合わせを探す。今回変化したマスが関わる
    * ペアのみを対象とする（JudgeEngineと同様、重複抽選を避けるため）。
-   * @returns {boolean}
+   * どのマスが該当したかをUI側で強調表示できるよう、該当ペアの配列を返す。
+   * @returns {Array<{a:number, b:number, char:string}>}
    */
   _checkAdjacentSameChar() {
     const grid = this.reelEngine.getGrid();
     const changed = this.reelEngine.getChangedIndices();
+    const hits = [];
 
     for (const pair of this._linePairs) {
       const { a, b } = pair;
@@ -301,10 +336,10 @@ export class GameEngine {
       if (charA !== charB) continue;
 
       if (Math.random() < REPLAY_ADJACENT_ACCEPTANCE_RATE) {
-        return true;
+        hits.push({ a, b, char: charA });
       }
     }
-    return false;
+    return hits;
   }
 
   _recordCellWords(results) {

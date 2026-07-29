@@ -1,7 +1,7 @@
 /**
  * JudgeEngine
  *
- * 毎フレーム、gridLines.buildLinePairs()で定義された63ペア（横縦斜めのみ）について
+ * 毎フレーム、gridLines.buildLinePairs()で定義された73ペア（横縦斜め＋端役）について
  * DictionaryEngine.has()（O(1)のHash検索）で判定する。辞書全探索は行わない。
  *
  * 【受理抽選（acceptanceRate）について】
@@ -31,9 +31,16 @@
  * 一度成立して固定されたペアは _confirmedPairs に記録し、二度と再評価・
  * 再抽選しない（重複成立の防止）。
  *
- * スコア計算: 1回のevaluate()呼び出しで新規に成立した語数をnとし、
- * score(n) = 100 * (2^n - 1) とする（Phase1で確定した仕様。
- * n=1→100, n=2→300, n=3→700, n=4→1500, ...）。
+ * 【スコア計算（端役対応）】
+ * 従来はscore(n) = 100*(2^n-1)という、同一タイミングでの成立数nに基づく
+ * 指数的なコンボボーナス式のみだった。端役（type:"edge"）は通常役の
+ * 50%スコアという仕様に対応するため、各成立の「重み」（通常役=1.0、
+ * 端役=0.5）の平均値を元の指数式に掛け合わせる方式にした。
+ *   score = round(100 * (2^n - 1) * (重みの合計 / n))
+ * これにより、全て通常役ならば従来通りの値、全て端役ならばちょうど半分、
+ * 混在時はその中間になる。端数は四捨五入で丸める。
+ * なお、コンボ判定・コンボボーナス（GameEngine側で計算）は端役も通常役と
+ * 完全に同等に扱い、この重み付けの影響を受けない。
  */
 export class JudgeEngine {
   /**
@@ -123,7 +130,14 @@ export class JudgeEngine {
     }
 
     const n = results.length;
-    const score = n > 0 ? 100 * (2 ** n - 1) : 0;
+    let score = 0;
+    if (n > 0) {
+      const weightSum = results.reduce(
+        (sum, r) => sum + (r.type === "edge" ? 0.5 : 1.0),
+        0
+      );
+      score = Math.round(100 * (2 ** n - 1) * (weightSum / n));
+    }
 
     return { results, score, n };
   }

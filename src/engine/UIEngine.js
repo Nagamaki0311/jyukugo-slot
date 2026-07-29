@@ -69,7 +69,7 @@ export class UIEngine {
         </div>
 
         <div class="controls">
-          <button class="spin-button" data-role="spin-button">SPIN（30円）</button>
+          <button class="spin-button" data-role="spin-button">SPIN</button>
           <label class="debug-toggle">
             <input type="checkbox" data-role="debug-toggle" />
             デバッグモード
@@ -98,7 +98,6 @@ export class UIEngine {
             <p class="result-card-sub">所持金が尽きました</p>
             <dl class="result-card-stats">
               <div><dt>最終スコア</dt><dd data-role="result-final-score">0</dd></div>
-              <div><dt>最終所持金</dt><dd data-role="result-final-money">0円</dd></div>
               <div><dt>最大コンボ</dt><dd data-role="result-max-combo">0</dd></div>
               <div><dt>スピン回数</dt><dd data-role="result-play-count">0</dd></div>
             </dl>
@@ -270,15 +269,8 @@ export class UIEngine {
     const spinButton = this.root.querySelector('[data-role="spin-button"]');
     if (!state.spinning) {
       spinButton.textContent =
-        state.pendingReplays > 0 ? "SPIN（リプレイ）" : "SPIN（30円）";
+        state.pendingReplays > 0 ? "SPIN（リプレイ）" : "SPIN";
     }
-  }
-
-  /**
-   * リプレイ成立時、目立つ「REPLAY」演出を表示する。
-   */
-  onReplayTriggered() {
-    this.animationEngine.playReplayBanner();
   }
 
   /**
@@ -293,6 +285,19 @@ export class UIEngine {
     // 1コンボ（連鎖の起点となる最初の1語）では演出を出さず、2コンボ以上から表示する。
     if (hit.comboIncreased && hit.comboCount >= 2) {
       this.animationEngine.playComboBanner(hit.comboCount, hit.score);
+    }
+
+    // リプレイ成立箇所を、通常の成立よりさらに目立つゴールドの専用演出で
+    // 強調表示してから「REPLAY」バナーを表示する。プレイヤーが
+    // 「この組み合わせで成立した」と直感的に分かるよう、該当マスの中心に
+    // バナーを表示する。
+    if (hit.replayTriggered) {
+      const replayIndices = [
+        ...hit.replayDuplicateWordPairs.flatMap((p) => [p.a, p.b]),
+        ...hit.replayAdjacentPairs.flatMap((p) => [p.a, p.b]),
+      ];
+      this.animationEngine.playReplayHighlight(replayIndices);
+      this.animationEngine.playReplayBanner(replayIndices);
     }
 
     const list = this.root.querySelector('[data-role="result-list"]');
@@ -352,8 +357,6 @@ export class UIEngine {
     this.root.querySelector('[data-role="result-final-score"]').textContent = String(
       state.sessionScore
     );
-    this.root.querySelector('[data-role="result-final-money"]').textContent =
-      `${state.money}円`;
     this.root.querySelector('[data-role="result-max-combo"]').textContent = String(
       state.sessionMaxCombo
     );

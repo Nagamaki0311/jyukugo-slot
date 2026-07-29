@@ -104,7 +104,6 @@ async function main() {
         );
       }
       if (hit.replayTriggered) {
-        uiEngine.onReplayTriggered();
         uiEngine.appendDebugLog(
           `[${(gameEngine.getSpinElapsedMs(now) / 1000).toFixed(2)}s] REPLAY発生`
         );
@@ -136,9 +135,11 @@ async function main() {
       if (finalState.gameOver) {
         showResult();
       } else if (finalState.pendingReplays > 0) {
-        // リプレイ権が残っている場合、ボタン操作なしで自動的に次のスピンへ
+        // リプレイ権が残っている場合、ボタン操作なしで自動的に次のスピンへ。
+        // REPLAY演出（強調表示+バナー、約1100ms）が最後まで見えるよう
+        // 演出時間に合わせて待機してから次のスピンを開始する。
         uiEngine.setSpinButtonEnabled(false);
-        setTimeout(startSpin, 700);
+        setTimeout(startSpin, 1300);
       } else {
         uiEngine.setSpinButtonEnabled(true);
       }
