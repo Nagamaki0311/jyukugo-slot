@@ -60,12 +60,12 @@ export class UIEngine {
           </div>
         </div>
 
-        <div class="reel-grid-wrapper">
+        <div class="reel-grid-wrapper" data-role="reel-grid-wrapper">
           <div class="reel-grid" data-role="reel-grid"></div>
-          <svg class="judge-lines-overlay" data-role="judge-lines-overlay" hidden></svg>
-          <div class="effect-layer" data-role="effect-layer"></div>
-          <div class="banner-layer" data-role="banner-layer"></div>
-          <div class="word-tooltip" data-role="word-tooltip" hidden></div>
+          <svg class="judge-lines-overlay" data-role="judge-lines-overlay" hidden aria-hidden="true"></svg>
+          <div class="effect-layer" data-role="effect-layer" aria-hidden="true"></div>
+          <div class="banner-layer" data-role="banner-layer" aria-hidden="true"></div>
+          <div class="word-tooltip" data-role="word-tooltip" hidden aria-hidden="true"></div>
         </div>
 
         <div class="controls">
@@ -75,6 +75,8 @@ export class UIEngine {
             デバッグモード
           </label>
         </div>
+
+        <p class="sr-only" data-role="sr-announcer" aria-live="polite" aria-atomic="true"></p>
 
         <div class="result-panel">
           <h2 class="result-heading">成立熟語一覧</h2>
@@ -92,12 +94,25 @@ export class UIEngine {
           <div class="debug-log" data-role="debug-log"></div>
         </div>
 
-        <div class="result-overlay" data-role="result-overlay" hidden>
-          <div class="result-card">
-            <h2 class="result-card-heading">ゲームオーバー</h2>
-            <p class="result-card-sub">所持金が尽きました</p>
+        <div
+          class="result-overlay"
+          data-role="result-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="result-card-heading"
+          aria-describedby="result-card-sub"
+          hidden
+        >
+          <div class="result-card" data-role="result-card">
+            <div class="result-stamp" data-role="result-stamp" aria-hidden="true">
+              <span data-role="result-stamp-text">終</span>
+            </div>
+            <p class="result-card-rank" data-role="result-rank">見習い</p>
+            <h2 class="result-card-heading" id="result-card-heading">ゲームオーバー</h2>
+            <p class="result-card-sub" id="result-card-sub">所持金が尽きました</p>
             <dl class="result-card-stats">
               <div><dt>最終スコア</dt><dd data-role="result-final-score">0</dd></div>
+              <div><dt>最終所持金</dt><dd data-role="result-final-money">0円</dd></div>
               <div><dt>最大コンボ</dt><dd data-role="result-max-combo">0</dd></div>
               <div><dt>スピン回数</dt><dd data-role="result-play-count">0</dd></div>
             </dl>
@@ -112,6 +127,7 @@ export class UIEngine {
       const cell = document.createElement("div");
       cell.className = "cell";
       cell.dataset.index = String(i);
+      cell.tabIndex = -1;
 
       const charEl = document.createElement("span");
       charEl.className = "cell-char";
@@ -121,9 +137,39 @@ export class UIEngine {
       this._cellElements.push(cell);
       this._cellCharElements.push(charEl);
 
-      cell.addEventListener("mouseenter", () => this._showTooltipForCell(i, cell));
-      cell.addEventListener("mouseleave", () => this._hideTooltip());
+      // マウス: ホバーで表示。タッチ/キーボード: タップ・Enter/Spaceでトグル表示。
+      // mouseenter/leaveではなくpointerenter/leaveをpointerType==="mouse"に
+      // 限定して使う。タッチ操作はtouchend後にmouseenter等のマウスイベントを
+      // 合成発火することがあり、素朴にmouseenterへ反応すると
+      // 「表示した直後に自分のclickで閉じる」二重発火になるため。
+      cell.addEventListener("pointerenter", (e) => {
+        if (e.pointerType === "mouse") this._showTooltipForCell(i, cell);
+      });
+      cell.addEventListener("pointerleave", (e) => {
+        if (e.pointerType === "mouse") this._hideTooltip();
+      });
+      cell.addEventListener("pointerdown", (e) => {
+        this._lastCellPointerType = e.pointerType;
+      });
+      cell.addEventListener("click", (e) => {
+        if (this._lastCellPointerType === "mouse") return;
+        e.stopPropagation();
+        this._toggleTooltipForCell(i, cell);
+      });
+      cell.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+          this._toggleTooltipForCell(i, cell);
+        } else if (e.key === "Escape") {
+          this._hideTooltip();
+        }
+      });
     }
+
+    document.addEventListener("click", () => this._hideTooltip());
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") this._hideTooltip();
+    });
 
     this._buildJudgeLinesOverlay();
   }
@@ -179,11 +225,25 @@ export class UIEngine {
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
     tooltip.hidden = false;
+    this._shownTooltipIndex = index;
+  }
+
+  /**
+   * タップ/クリック・キーボード操作用。同じマスへの操作なら閉じ、
+   * 別マスまたは非表示状態なら表示する。
+   */
+  _toggleTooltipForCell(index, cellEl) {
+    if (this._shownTooltipIndex === index) {
+      this._hideTooltip();
+      return;
+    }
+    this._showTooltipForCell(index, cellEl);
   }
 
   _hideTooltip() {
     const tooltip = this.root.querySelector('[data-role="word-tooltip"]');
     tooltip.hidden = true;
+    this._shownTooltipIndex = null;
   }
 
   _bindEvents() {
@@ -241,6 +301,87 @@ export class UIEngine {
   }
 
   /**
+   * スコア・所持金の表示数値を、値が変わったときだけ滑らかにカウントアップ/
+   * ダウンさせる。同じ目標値への呼び出しは無視する（毎フレームrender()から
+   * 呼ばれても、値が変わっていない限りアニメーションを再開させないため）。
+   * prefers-reduced-motionが有効な場合は即座に確定値を表示する。
+   * @param {string} key アニメーション状態を区別するキー（"score"|"money"等）
+   * @param {HTMLElement} el
+   * @param {number} toValue
+   * @param {{suffix?: string, duration?: number}} [opts]
+   */
+  _animateNumberTo(key, el, toValue, opts = {}) {
+    const { suffix = "", duration = 350 } = opts;
+    const tweens = (this._numberTweens ||= new Map());
+    const prev = tweens.get(key);
+
+    if (prev && prev.target === toValue) return;
+
+    const fromValue = prev ? prev.current : toValue;
+    if (prev && prev.rafId != null) cancelAnimationFrame(prev.rafId);
+
+    const prefersReducedMotion =
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion || fromValue === toValue) {
+      el.textContent = `${toValue}${suffix}`;
+      tweens.set(key, { current: toValue, target: toValue, rafId: null });
+      return;
+    }
+
+    const startTime = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - (1 - t) ** 3;
+      const value = Math.round(fromValue + (toValue - fromValue) * eased);
+      el.textContent = `${value}${suffix}`;
+      if (t < 1) {
+        const rafId = requestAnimationFrame(tick);
+        tweens.set(key, { current: value, target: toValue, rafId });
+      } else {
+        tweens.set(key, { current: toValue, target: toValue, rafId: null });
+      }
+    };
+    const rafId = requestAnimationFrame(tick);
+    tweens.set(key, { current: fromValue, target: toValue, rafId });
+  }
+
+  /**
+   * スピン終了直後、所持金の増減を score-item の近くに小さくポップアップ表示する。
+   * @param {number} amount 増減額（円）。0のときは何もしない。
+   */
+  playMoneyPopup(amount) {
+    if (!amount) return;
+    const moneyEl = this.root.querySelector('[data-role="money"]');
+    const moneyItem = moneyEl?.closest(".score-item");
+    if (!moneyItem) return;
+
+    const popup = document.createElement("span");
+    popup.className = "money-popup";
+    popup.textContent = amount > 0 ? `+${amount}円` : `${amount}円`;
+    moneyItem.appendChild(popup);
+    setTimeout(() => popup.remove(), 900);
+  }
+
+  /**
+   * スクリーンリーダー向けに、視覚的には非表示のライブリージョンへ
+   * メッセージを流す。役成立・リプレイ発生・ゲームオーバーなど、
+   * 意味のある変化のみを通知し、毎フレームの盤面更新では呼ばない。
+   * 直前と同一の文言でも再度読み上げられるよう、一度空にしてから設定する。
+   * @param {string} text
+   */
+  announce(text) {
+    const el = this.root.querySelector('[data-role="sr-announcer"]');
+    if (!el) return;
+    el.textContent = "";
+    // 同一テキストの連続通知でも再読み上げされるよう、次フレームで設定する
+    requestAnimationFrame(() => {
+      el.textContent = text;
+    });
+  }
+
+  /**
    * 毎フレーム呼び出し、GameEngineの状態をDOMへ反映する。
    * 「現在のスコア」は、このゲーム（セッション）で完了したスピンの合計
    * （sessionScore）に、進行中のスピンのスコア（spinScore）を加えたもの。
@@ -258,19 +399,56 @@ export class UIEngine {
         }
       }
       cellEl.classList.toggle("cell-fixed", !!state.fixedFlags[i]);
+
+      // 成立語を持つ確定マスのみキーボード操作対象にする
+      // （タブ移動が30マス分ノイズにならないよう、意味のあるマスだけ含める）
+      if (state.fixedFlags[i]) {
+        const words = this.gameEngine.getWordsAtCell(i);
+        if (words.length > 0 && cellEl.tabIndex !== 0) {
+          cellEl.tabIndex = 0;
+          cellEl.setAttribute(
+            "aria-label",
+            words.map((w) => `${w.word}（${w.reading}）`).join("、")
+          );
+        }
+      } else if (cellEl.tabIndex !== -1) {
+        cellEl.tabIndex = -1;
+        cellEl.removeAttribute("aria-label");
+      }
     }
     this._prevGrid = state.grid.slice();
 
     const currentScore = (state.sessionScore || 0) + (state.spinScore || 0);
-    this.root.querySelector('[data-role="current-score"]').textContent =
-      String(currentScore);
-    this.root.querySelector('[data-role="money"]').textContent = `${state.money}円`;
+    this._animateNumberTo(
+      "score",
+      this.root.querySelector('[data-role="current-score"]'),
+      currentScore
+    );
+    this._animateNumberTo(
+      "money",
+      this.root.querySelector('[data-role="money"]'),
+      state.money,
+      { suffix: "円" }
+    );
 
     const spinButton = this.root.querySelector('[data-role="spin-button"]');
     if (!state.spinning) {
       spinButton.textContent =
         state.pendingReplays > 0 ? "SPIN（リプレイ）" : "SPIN";
     }
+
+    // spinTier（boost/jackpot）はスコアバランスには使われるがこれまで画面に
+    // 一切表れていなかったため、スピン中のみ盤面を淡く発光させて
+    // 「今回は何かが起きそうだ」という期待感を演出する。
+    const wrapper = this.root.querySelector('[data-role="reel-grid-wrapper"]');
+    wrapper.classList.toggle(
+      "reel-grid-wrapper-boost",
+      state.spinning && state.spinTier === "boost"
+    );
+    wrapper.classList.toggle(
+      "reel-grid-wrapper-jackpot",
+      state.spinning && state.spinTier === "jackpot"
+    );
   }
 
   /**
@@ -306,10 +484,23 @@ export class UIEngine {
       li.textContent = `${r.word}（${r.reading}）`;
       list.prepend(li);
     }
+
+    list.classList.toggle("result-list-overflowing", list.scrollHeight > list.clientHeight);
+
+    if (hit.results.length > 0) {
+      const words = hit.results.map((r) => `${r.word}（${r.reading}）`).join("、");
+      const comboText = hit.comboCount >= 2 ? `、${hit.comboCount}連鎖` : "";
+      this.announce(`成立: ${words}、プラス${hit.score}点${comboText}`);
+    }
+    if (hit.replayTriggered) {
+      this.announce("リプレイ発生、もう一度スピンします");
+    }
   }
 
   clearResultList() {
-    this.root.querySelector('[data-role="result-list"]').innerHTML = "";
+    const list = this.root.querySelector('[data-role="result-list"]');
+    list.innerHTML = "";
+    list.classList.remove("result-list-overflowing");
   }
 
   /**
@@ -350,13 +541,31 @@ export class UIEngine {
   }
 
   /**
+   * 最終スコアから称号（ランク）を決める。ゲーム性やスコア計算そのものには
+   * 影響しない、リザルト画面のみの演出用の分類。
+   * @param {number} score
+   * @returns {string}
+   */
+  _computeRank(score) {
+    if (score >= 15000) return "傑作";
+    if (score >= 8000) return "秀作";
+    if (score >= 4000) return "佳作";
+    if (score >= 1500) return "習作";
+    return "初心";
+  }
+
+  /**
    * ゲームオーバー時のリザルト画面を表示する。
+   * ダイアログとしてのフォーカス管理も行う（表示前のフォーカス位置を保存し、
+   * カード内の「もう一度プレイ」ボタンへフォーカスを移す。閉じたら復元する）。
    * @param {{sessionScore:number, money:number, sessionMaxCombo:number, sessionPlayCount:number}} state
    */
   showResultOverlay(state) {
     this.root.querySelector('[data-role="result-final-score"]').textContent = String(
       state.sessionScore
     );
+    this.root.querySelector('[data-role="result-final-money"]').textContent =
+      `${state.money}円`;
     this.root.querySelector('[data-role="result-max-combo"]').textContent = String(
       state.sessionMaxCombo
     );
@@ -364,12 +573,43 @@ export class UIEngine {
       state.sessionPlayCount
     );
 
+    const rank = this._computeRank(state.sessionScore);
+    this.root.querySelector('[data-role="result-rank"]').textContent = `${rank}`;
+
     const overlay = this.root.querySelector('[data-role="result-overlay"]');
+    const card = this.root.querySelector('[data-role="result-card"]');
     overlay.hidden = false;
+    card.classList.remove("result-card-enter");
+    void card.offsetWidth;
+    card.classList.add("result-card-enter");
+
+    this.announce(
+      `ゲームオーバー。称号: ${rank}。最終スコア${state.sessionScore}点、スピン${state.sessionPlayCount}回、最大コンボ${state.sessionMaxCombo}`
+    );
+
+    this._lastFocusedBeforeOverlay = document.activeElement;
+    const replayButton = this.root.querySelector('[data-role="result-replay-button"]');
+    replayButton.focus();
+
+    if (!this._overlayTrapBound) {
+      this._overlayTrapBound = true;
+      overlay.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          // カード内の唯一の操作対象はリプレイボタンのため、
+          // Tab/Shift+Tabのどちらでも常にそこへフォーカスを留める
+          e.preventDefault();
+          replayButton.focus();
+        }
+      });
+    }
   }
 
   hideResultOverlay() {
     const overlay = this.root.querySelector('[data-role="result-overlay"]');
     overlay.hidden = true;
+    if (this._lastFocusedBeforeOverlay && this._lastFocusedBeforeOverlay.focus) {
+      this._lastFocusedBeforeOverlay.focus();
+    }
+    this._lastFocusedBeforeOverlay = null;
   }
 }

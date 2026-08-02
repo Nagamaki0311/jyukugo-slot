@@ -127,6 +127,7 @@ async function main() {
         maxComboThisSpin: finalState.maxComboThisSpin,
       });
       uiEngine.renderStats(finalState);
+      uiEngine.playMoneyPopup(finalState.lastMoneyGain);
       uiEngine.appendDebugLog(
         `スピン終了: ${finalState.spinResults.length}語成立 / ${finalState.spinScore}点 / 所持金${finalState.money}円` +
           (finalState.pendingReplays > 0 ? ` / リプレイ残り${finalState.pendingReplays}回` : "")
