@@ -39,6 +39,13 @@ export class UIEngine {
     );
 
     this._bindEvents();
+
+    // 初回描画後にフェードイン（画面遷移の起点）。次フレームでクラスを
+    // 付与することで、初期状態(opacity:0)からのtransitionを確実に発火させる。
+    const appRoot = this.root.querySelector(".jukugo-slot");
+    if (appRoot) {
+      requestAnimationFrame(() => appRoot.classList.add("app-enter"));
+    }
   }
 
   _buildDom() {
@@ -150,6 +157,9 @@ export class UIEngine {
       });
       cell.addEventListener("pointerdown", (e) => {
         this._lastCellPointerType = e.pointerType;
+        if (e.pointerType !== "mouse" && cell.tabIndex === 0) {
+          this.animationEngine.spawnRipple(cell, e.clientX, e.clientY);
+        }
       });
       cell.addEventListener("click", (e) => {
         if (this._lastCellPointerType === "mouse") return;
@@ -248,6 +258,9 @@ export class UIEngine {
 
   _bindEvents() {
     const spinButton = this.root.querySelector('[data-role="spin-button"]');
+    spinButton.addEventListener("pointerdown", (e) => {
+      this.animationEngine.spawnRipple(spinButton, e.clientX, e.clientY);
+    });
     spinButton.addEventListener("click", () => {
       this.audioEngine.play("buttonPress");
       this._onSpinRequested?.();
@@ -264,6 +277,9 @@ export class UIEngine {
     });
 
     const replayButton = this.root.querySelector('[data-role="result-replay-button"]');
+    replayButton.addEventListener("pointerdown", (e) => {
+      this.animationEngine.spawnRipple(replayButton, e.clientX, e.clientY);
+    });
     replayButton.addEventListener("click", () => {
       this.audioEngine.play("buttonPress");
       this._onReplayRequested?.();
@@ -362,6 +378,13 @@ export class UIEngine {
     popup.textContent = amount > 0 ? `+${amount}円` : `${amount}円`;
     moneyItem.appendChild(popup);
     setTimeout(() => popup.remove(), 900);
+
+    if (amount > 0 && moneyEl) {
+      moneyEl.classList.remove("score-value-gain");
+      void moneyEl.offsetWidth;
+      moneyEl.classList.add("score-value-gain");
+      setTimeout(() => moneyEl.classList.remove("score-value-gain"), 600);
+    }
   }
 
   /**
@@ -385,6 +408,12 @@ export class UIEngine {
    * 毎フレーム呼び出し、GameEngineの状態をDOMへ反映する。
    * 「現在のスコア」は、このゲーム（セッション）で完了したスピンの合計
    * （sessionScore）に、進行中のスピンのスコア（spinScore）を加えたもの。
+   * ただし、GameEngine._settleSpin()はスピン終了時にspinScoreをsessionScoreへ
+   * 合算するがspinScore自体はクリアしない（recordSpinResult等がスピン終了後も
+   * 直近スピンのスコアを参照できるようにするため）。そのため、スピン終了後
+   * 〜次スピン開始前の間はspinScoreがsessionScoreへ二重に加算された値になって
+   * しまう。ここではstate.spinningを見て、スピン進行中のみspinScoreを加える
+   * ことでこれを避ける（スピン終了後はsessionScore単体が正しい合計）。
    * @param {object} state GameEngine.getState()の結果
    */
   render(state) {
@@ -418,7 +447,8 @@ export class UIEngine {
     }
     this._prevGrid = state.grid.slice();
 
-    const currentScore = (state.sessionScore || 0) + (state.spinScore || 0);
+    const currentScore =
+      (state.sessionScore || 0) + (state.spinning ? state.spinScore || 0 : 0);
     this._animateNumberTo(
       "score",
       this.root.querySelector('[data-role="current-score"]'),
@@ -442,6 +472,10 @@ export class UIEngine {
     // 「今回は何かが起きそうだ」という期待感を演出する。
     const wrapper = this.root.querySelector('[data-role="reel-grid-wrapper"]');
     wrapper.classList.toggle(
+      "reel-grid-wrapper-active",
+      state.spinning && state.spinTier === "base"
+    );
+    wrapper.classList.toggle(
       "reel-grid-wrapper-boost",
       state.spinning && state.spinTier === "boost"
     );
@@ -458,6 +492,14 @@ export class UIEngine {
     this.audioEngine.play("hit");
     this.animationEngine.playHit(hit.results.flatMap((r) => [r.a, r.b]));
     this.animationEngine.playScorePopup(hit.results, hit.score);
+
+    const scoreEl = this.root.querySelector('[data-role="current-score"]');
+    if (scoreEl) {
+      scoreEl.classList.remove("score-value-gain");
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add("score-value-gain");
+      setTimeout(() => scoreEl.classList.remove("score-value-gain"), 600);
+    }
 
     // コンボ演出は「熟語の成立が連鎖しているか」で数えるcomboCountを使う。
     // 1コンボ（連鎖の起点となる最初の1語）では演出を出さず、2コンボ以上から表示する。
@@ -606,10 +648,25 @@ export class UIEngine {
 
   hideResultOverlay() {
     const overlay = this.root.querySelector('[data-role="result-overlay"]');
-    overlay.hidden = true;
-    if (this._lastFocusedBeforeOverlay && this._lastFocusedBeforeOverlay.focus) {
-      this._lastFocusedBeforeOverlay.focus();
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const finish = () => {
+      overlay.hidden = true;
+      overlay.classList.remove("result-overlay-closing");
+      if (this._lastFocusedBeforeOverlay && this._lastFocusedBeforeOverlay.focus) {
+        this._lastFocusedBeforeOverlay.focus();
+      }
+      this._lastFocusedBeforeOverlay = null;
+    };
+
+    if (prefersReducedMotion) {
+      finish();
+      return;
     }
-    this._lastFocusedBeforeOverlay = null;
+
+    // 暗転が唐突に消えないよう、フェードアウトしてから非表示にする
+    overlay.classList.add("result-overlay-closing");
+    setTimeout(finish, 220);
   }
 }

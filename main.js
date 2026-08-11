@@ -71,6 +71,7 @@ async function main() {
       return;
     }
 
+    uiEngine.animationEngine.playSpinStart(gameEngine.reelEngine.cellCount);
     uiEngine.render(gameEngine.getState());
     requestAnimationFrame(loop);
   }
@@ -116,6 +117,7 @@ async function main() {
       requestAnimationFrame(loop);
     } else {
       spinning = false;
+      uiEngine.animationEngine.playSpinStop();
 
       const finalState = gameEngine.getState();
       // LocalStorageへの累計保存は今後の活用に備えて継続するが、

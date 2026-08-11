@@ -24,15 +24,35 @@
   --color-sumi: #23211d;
   --color-sumi-soft: #4a463d;
   --color-shu: #a6382c;
+  --color-shu-deep: #7c261c;
   --color-ki: #8b6e4e;
+  --color-gold: #c99a2e;
+  --color-gold-soft: #e0b13a;
 
   --font-display: "Shippori Mincho", "Noto Serif JP", serif;
   --font-body: "Noto Serif JP", "Shippori Mincho", serif;
   --font-mono: "SFMono-Regular", Consolas, monospace;
+
+  --shadow-card: 0 12px 32px -14px rgba(35, 33, 29, 0.35), 0 2px 8px -2px rgba(35, 33, 29, 0.18);
+  --shadow-panel: 0 6px 20px -10px rgba(35, 33, 29, 0.28);
+  --radius-soft: 3px;
+
+  /* タッチ操作時にブラウザ標準のハイライト矩形を出さない（自前のripple/pressで代替） */
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* タッチデバイスでのダブルタップズームやテキスト選択によるもたつきを抑え、
+   ボタン・マス操作の反応を軽快にする。入力欄が存在しないゲームのため
+   user-select: noneを全体に適用しても支障はない。 */
+button,
+.cell {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 /* スクリーンリーダー専用（視覚的には非表示だが読み上げ対象にする） */
@@ -69,13 +89,19 @@ body {
 
 body {
   background-image:
+    radial-gradient(
+      ellipse 80% 60% at 50% 0%,
+      rgba(166, 56, 44, 0.05),
+      transparent 60%
+    ),
     repeating-linear-gradient(
       0deg,
       rgba(139, 110, 78, 0.035) 0px,
       rgba(139, 110, 78, 0.035) 1px,
       transparent 1px,
       transparent 3px
-    );
+    ),
+    radial-gradient(ellipse 120% 90% at 50% 100%, rgba(35, 33, 29, 0.05), transparent 70%);
   min-height: 100vh;
   display: flex;
   justify-content: center;
@@ -85,6 +111,24 @@ body {
 .jukugo-slot {
   width: 100%;
   max-width: 720px;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* 初回描画後にJS側で付与する。ゲーム全体がふわっと現れる、画面遷移の起点 */
+.jukugo-slot.app-enter {
+  animation: app-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes app-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /*
@@ -114,15 +158,38 @@ body {
   font-weight: 800;
   font-size: 2.4rem;
   letter-spacing: 0.5em;
-  margin: 0 0 12px -0.5em;
+  margin: 0 0 14px -0.5em;
   color: var(--color-sumi);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .subtitle {
+  position: relative;
+  display: inline-block;
   font-size: 0.85rem;
   color: var(--color-sumi-soft);
   letter-spacing: 0.15em;
   margin: 0;
+  padding-top: 14px;
+}
+
+/* 見出し下の装飾罫線。中央に朱の点を置いた二重線で「和紙の一枚」感を強める */
+.subtitle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-ki) 30%,
+    var(--color-shu) 50%,
+    var(--color-ki) 70%,
+    transparent
+  );
 }
 
 /* ---------- スコアパネル ---------- */
@@ -130,19 +197,28 @@ body {
 .score-panel {
   display: flex;
   justify-content: center;
-  gap: 48px;
+  gap: 20px;
   margin-bottom: 32px;
-  padding: 18px 0;
+  padding: 20px 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
   border-top: 1px solid var(--color-washi-dark);
   border-bottom: 1px solid var(--color-washi-dark);
+  box-shadow: var(--shadow-panel);
 }
 
 .score-item {
   position: relative;
   display: flex;
+  flex: 1 1 0;
+  max-width: 220px;
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  padding: 4px 20px;
+}
+
+.score-item + .score-item {
+  border-left: 1px solid var(--color-washi-dark);
 }
 
 .money-popup {
@@ -175,21 +251,40 @@ body {
 }
 
 .score-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--color-sumi-soft);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.15em;
 }
 
 .score-value {
   font-family: var(--font-display);
-  font-size: 1.8rem;
-  font-weight: 600;
+  font-size: 1.9rem;
+  font-weight: 700;
   color: var(--color-shu);
   font-variant-numeric: tabular-nums;
+  transition: text-shadow 0.3s ease;
 }
 
 .score-value-money {
   color: var(--color-sumi);
+}
+
+/* 配当・得点の加算があった瞬間、値そのものを軽く発光させる。
+   playMoneyPopup/onHitと同じタイミングでJS側からクラス付与・除去する。 */
+.score-value-gain {
+  animation: score-value-gain 0.6s ease-out;
+}
+
+@keyframes score-value-gain {
+  0% {
+    text-shadow: 0 0 0 rgba(224, 177, 58, 0);
+  }
+  30% {
+    text-shadow: 0 0 14px rgba(224, 177, 58, 0.65);
+  }
+  100% {
+    text-shadow: 0 0 0 rgba(224, 177, 58, 0);
+  }
 }
 
 /* ---------- リールグリッド（原稿用紙モチーフ） ---------- */
@@ -264,6 +359,16 @@ body {
   gap: 0;
   border: 1px solid var(--color-sumi);
   background: var(--color-washi);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.25s ease;
+}
+
+/* 通常（baseティア）のスピン中も、盤面全体がわずかに息づくように見せる
+   アンビエント演出。所持金・成立確率など数値には一切影響しない。
+   boost/jackpotの発光と競合しないよう、そちらのクラスが付与されている間は
+   この演出を上書きさせる（後続セレクタで対応）。 */
+.reel-grid-wrapper-active .reel-grid {
+  animation: tier-glow-active 1.6s ease-in-out infinite alternate;
 }
 
 /* spinTier（boost/jackpot）の演出。所持金・成立確率など数値には一切影響せず、
@@ -276,21 +381,51 @@ body {
   animation: tier-glow-jackpot 0.7s ease-in-out infinite alternate;
 }
 
-@keyframes tier-glow-boost {
+/* スピン停止の瞬間、盤面全体を一度だけ軽く発光させて「止まった」ことを
+   知覚しやすくする（結果が並ぶ直前の一拍）。 */
+.reel-grid-wrapper-stop .reel-grid {
+  animation: grid-stop-flash 0.45s ease-out;
+}
+
+@keyframes tier-glow-active {
   from {
-    box-shadow: 0 0 0 1px transparent;
+    box-shadow: var(--shadow-card), 0 0 0 1px transparent;
   }
   to {
-    box-shadow: 0 0 16px 2px rgba(224, 177, 58, 0.45), 0 0 0 1px rgba(224, 177, 58, 0.55);
+    box-shadow: var(--shadow-card), 0 0 10px 1px rgba(139, 110, 78, 0.3), 0 0 0 1px rgba(139, 110, 78, 0.3);
+  }
+}
+
+@keyframes tier-glow-boost {
+  from {
+    box-shadow: var(--shadow-card), 0 0 0 1px transparent;
+  }
+  to {
+    box-shadow: var(--shadow-card), 0 0 16px 2px rgba(224, 177, 58, 0.45), 0 0 0 1px rgba(224, 177, 58, 0.55);
   }
 }
 
 @keyframes tier-glow-jackpot {
   from {
-    box-shadow: 0 0 0 1px transparent;
+    box-shadow: var(--shadow-card), 0 0 0 1px transparent;
   }
   to {
-    box-shadow: 0 0 26px 6px rgba(166, 56, 44, 0.6), 0 0 0 2px rgba(166, 56, 44, 0.75);
+    box-shadow: var(--shadow-card), 0 0 26px 6px rgba(166, 56, 44, 0.6), 0 0 0 2px rgba(166, 56, 44, 0.75);
+  }
+}
+
+@keyframes grid-stop-flash {
+  0% {
+    box-shadow: var(--shadow-card), 0 0 0 2px rgba(35, 33, 29, 0);
+    filter: brightness(1);
+  }
+  30% {
+    box-shadow: var(--shadow-card), 0 0 0 2px rgba(35, 33, 29, 0.5);
+    filter: brightness(1.06);
+  }
+  100% {
+    box-shadow: var(--shadow-card), 0 0 0 2px rgba(35, 33, 29, 0);
+    filter: brightness(1);
   }
 }
 
@@ -300,6 +435,7 @@ body {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-washi-dark);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(35, 33, 29, 0.02));
   position: relative;
   transition: background-color 0.3s ease;
 }
@@ -307,7 +443,8 @@ body {
 .cell-char {
   display: inline-block;
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 5.2vw, 2.2rem);
+  font-size: clamp(1.55rem, 5.4vw, 2.3rem);
+  font-weight: 500;
   color: var(--color-sumi-soft);
   transition: color 0.15s ease;
   will-change: transform, filter;
@@ -335,13 +472,14 @@ body {
 }
 
 .cell-fixed {
-  background-color: rgba(166, 56, 44, 0.06);
+  background: linear-gradient(180deg, rgba(166, 56, 44, 0.1), rgba(166, 56, 44, 0.04));
   cursor: default;
 }
 
 .cell-fixed .cell-char {
   color: var(--color-sumi);
-  font-weight: 600;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .cell-fixed::after {
@@ -349,8 +487,22 @@ body {
   position: absolute;
   inset: 4px;
   border: 1.5px solid rgba(166, 56, 44, 0.55);
-  border-radius: 2px;
+  border-radius: var(--radius-soft);
   pointer-events: none;
+}
+
+/* ツールチップを持つ確定マス（キーボード操作対象=tabIndex 0）は、
+   タップ・ホバー・フォーカスで押せることが分かるよう軽く反応させる。 */
+.cell[tabindex="0"] {
+  cursor: pointer;
+}
+
+.cell[tabindex="0"]:hover::after {
+  border-color: rgba(166, 56, 44, 0.85);
+}
+
+.cell[tabindex="0"]:active {
+  background-color: rgba(166, 56, 44, 0.16);
 }
 
 /* 枠線はフェードインのみ（拡大しない）。マス・枠線のサイズは常に固定し、
@@ -476,6 +628,52 @@ body {
   }
 }
 
+/* スピン開始の瞬間、盤面が左上から順にふわっと立ち上がる演出。
+   AnimationEngine.playSpinStart()が各セルへ--iカスタムプロパティ
+   （セルのindex）を設定した上でこのクラスを付与する。 */
+.cell-spin-in {
+  animation: cell-spin-in 0.32s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 6ms);
+}
+
+@keyframes cell-spin-in {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* タップ・クリック時に広がる波紋。ボタン・成立済みマスのpointerdownで
+   AnimationEngine.spawnRipple()がこの要素をその場に生成し、アニメーション後に
+   自身を破棄する。触感的なフィードバックを視覚的に補う。 */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(241, 234, 217, 0.55);
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  animation: ripple-expand 0.5s ease-out forwards;
+}
+
+.cell .ripple {
+  background: rgba(166, 56, 44, 0.28);
+}
+
+@keyframes ripple-expand {
+  0% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* ---------- コントロール ---------- */
 
 .controls {
@@ -487,30 +685,37 @@ body {
 }
 
 .spin-button {
+  position: relative;
+  overflow: hidden;
   font-family: var(--font-display);
   font-size: 1.2rem;
+  font-weight: 600;
   letter-spacing: 0.3em;
-  padding: 14px 56px;
-  background: var(--color-sumi);
+  padding: 15px 56px;
+  background: linear-gradient(180deg, #34322b, var(--color-sumi));
   color: var(--color-washi);
   border: 1px solid var(--color-sumi);
+  box-shadow: 0 6px 16px -6px rgba(35, 33, 29, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
 }
 
 .spin-button:hover:not(:disabled) {
-  background: var(--color-shu);
+  background: linear-gradient(180deg, #b8493c, var(--color-shu));
   border-color: var(--color-shu);
+  box-shadow: 0 8px 20px -6px rgba(166, 56, 44, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .spin-button:active:not(:disabled) {
   transform: scale(0.97);
+  box-shadow: 0 2px 8px -4px rgba(35, 33, 29, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .spin-button:disabled {
   background: var(--color-washi-dark);
   color: var(--color-sumi-soft);
   border-color: var(--color-washi-dark);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -883,14 +1088,41 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(35, 33, 29, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 10;
   padding: 20px;
+  animation: result-overlay-in 0.3s ease-out;
 }
 
 .result-overlay:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* hideResultOverlay()がhidden付与前にこのクラスを付け、フェードアウトしてから
+   非表示にする（暗転が唐突に消える違和感をなくす画面遷移用） */
+.result-overlay-closing {
+  animation: result-overlay-out 0.22s ease-in forwards;
+}
+
+@keyframes result-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes result-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 .result-card {
@@ -1006,42 +1238,117 @@ body {
 }
 
 .result-replay-button {
+  position: relative;
+  overflow: hidden;
   font-family: var(--font-display);
   font-size: 1.05rem;
+  font-weight: 600;
   letter-spacing: 0.2em;
-  padding: 12px 40px;
-  background: var(--color-sumi);
+  padding: 13px 40px;
+  background: linear-gradient(180deg, #34322b, var(--color-sumi));
   color: var(--color-washi);
   border: 1px solid var(--color-sumi);
+  box-shadow: 0 6px 16px -6px rgba(35, 33, 29, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
 }
 
 .result-replay-button:hover {
-  background: var(--color-shu);
+  background: linear-gradient(180deg, #b8493c, var(--color-shu));
   border-color: var(--color-shu);
+  box-shadow: 0 8px 20px -6px rgba(166, 56, 44, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .result-replay-button:active {
   transform: scale(0.97);
 }
 
+/* ---------- 狭幅（スマートフォン）向け調整 ----------
+   本文フォントの文字間隔(letter-spacing)が広めに設定されているため、
+   375〜390px程度の画面幅では見出し・ボタン・リザルトカードの文言が
+   不自然な位置で折り返してしまう。該当要素のみ間隔と余白を詰める。 */
+@media (max-width: 420px) {
+  body {
+    padding: 32px 14px 56px;
+  }
+
+  .title {
+    font-size: 2rem;
+    letter-spacing: 0.3em;
+    margin-left: -0.3em;
+  }
+
+  .score-panel {
+    gap: 8px;
+    padding: 16px 4px;
+  }
+
+  .score-item {
+    padding: 4px 10px;
+  }
+
+  .score-value {
+    font-size: 1.5rem;
+  }
+
+  .spin-button {
+    padding: 14px 0;
+    width: 100%;
+    letter-spacing: 0.25em;
+  }
+
+  .controls {
+    width: 100%;
+  }
+
+  .result-card {
+    padding: 32px 24px;
+  }
+
+  .result-card-heading {
+    font-size: 1.3rem;
+    letter-spacing: 0.08em;
+  }
+
+  .result-replay-button {
+    width: 100%;
+    letter-spacing: 0.1em;
+    padding: 13px 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cell-changing,
   .cell-hit-flash::after,
   .cell-pop,
+  .cell-replay-pop,
+  .cell-replay-flash::after,
+  .cell-spin-in,
   .score-popup,
+  .score-value-gain,
   .combo-banner,
   .replay-banner,
   .grid-shake-light,
   .grid-shake-strong,
+  .grid-stop-flash,
   .hit-particle,
   .shockwave-ring,
+  .ripple,
   .result-card-enter,
   .result-stamp,
+  .result-overlay,
+  .result-overlay-closing,
   .money-popup,
+  .jukugo-slot.app-enter,
+  .reel-grid-wrapper-active .reel-grid,
   .reel-grid-wrapper-boost .reel-grid,
-  .reel-grid-wrapper-jackpot .reel-grid {
+  .reel-grid-wrapper-jackpot .reel-grid,
+  .reel-grid-wrapper-stop .reel-grid {
     animation: none !important;
+  }
+
+  .jukugo-slot {
+    opacity: 1;
+    transform: none;
   }
 }

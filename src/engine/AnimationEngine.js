@@ -256,4 +256,58 @@ export class AnimationEngine {
       this._bannerLayerEl.innerHTML = "";
     }
   }
+
+  /**
+   * スピン開始の瞬間の演出。盤面全体を左上から順にふわっと立ち上げる
+   * （CSS側の.cell-spin-inがマスindexを基にした遅延で連鎖する）。
+   * @param {number} cellCount
+   */
+  playSpinStart(cellCount) {
+    for (let i = 0; i < cellCount; i++) {
+      const cellEl = this._getCellElement(i);
+      if (!cellEl) continue;
+      cellEl.classList.remove("cell-spin-in");
+      cellEl.style.setProperty("--i", String(i));
+      void cellEl.offsetWidth;
+      cellEl.classList.add("cell-spin-in");
+      setTimeout(() => cellEl.classList.remove("cell-spin-in"), 500);
+    }
+  }
+
+  /**
+   * スピン停止の瞬間の演出。盤面全体を一度だけ軽く発光させ、
+   * 「止まった」ことを知覚しやすくする。
+   */
+  playSpinStop() {
+    const wrapper = document.querySelector('[data-role="reel-grid-wrapper"]');
+    if (!wrapper) return;
+    wrapper.classList.remove("reel-grid-wrapper-stop");
+    void wrapper.offsetWidth;
+    wrapper.classList.add("reel-grid-wrapper-stop");
+    setTimeout(() => wrapper.classList.remove("reel-grid-wrapper-stop"), 500);
+  }
+
+  /**
+   * ボタン・成立済みマスのタップ/クリック位置から広がる波紋を表示する
+   * （タッチフィードバックの視覚的な補強）。
+   * @param {HTMLElement} el 波紋を追加する基準要素（position:relative/overflow:hiddenを想定）
+   * @param {number} clientX
+   * @param {number} clientY
+   */
+  spawnRipple(el, clientX, clientY) {
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.6;
+    const x = clientX != null ? clientX - rect.left : rect.width / 2;
+    const y = clientY != null ? clientY - rect.top : rect.height / 2;
+
+    const ripple = document.createElement("span");
+    ripple.className = "ripple";
+    ripple.style.width = `${size}px`;
+    ripple.style.height = `${size}px`;
+    ripple.style.left = `${x}px`;
+    ripple.style.top = `${y}px`;
+    el.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 500);
+  }
 }
