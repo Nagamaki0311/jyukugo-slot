@@ -2,6 +2,8 @@
 
 project001はAgent-Reach（[Panniantong/Agent-Reach](https://github.com/Panniantong/Agent-Reach)、MIT License）をOptional Dependencyとして扱う。project001自体はAgent-Reachへの依存を持たず、実行環境にインストールされている場合のみResearcherが活用する。
 
+**現在Tier2（検出のみ）**: 動作未検証のまま複数セッションで`unavailable`が続いているため、`.claude/agents/researcher.md`への振る舞い統合は見送っている（docs/capability-layer.md、D-021参照）。以下は検出・動作確認が取れた際にTier1へ昇格する場合の利用方針として残す。
+
 ## Agent-Reachとは
 
 - `pip install agent-reach` で導入するCLIツール（`agent-reach`コマンド）。
@@ -24,8 +26,7 @@ command -v agent-reach >/dev/null 2>&1 && agent-reach doctor
 
 ## フォールバック方針
 
-- 個別チャネルの取得コマンドが失敗した場合も、そのチャネルだけスキップして次の情報源に進むか、WebFetch/WebSearchで代替する。タスク全体を止めない。
-- project001のいかなるAgentも、Agent-Reachの存在を前提とした処理を書かない。「あれば使う、なければ今まで通り」を徹底する。
+個別チャネルの取得コマンドが失敗した場合も、そのチャネルだけスキップして次の情報源に進むか、WebFetch/WebSearchで代替する。タスク全体を止めない（一般原則はdocs/capability-layer.md参照）。
 
 ## 疎結合設計（アーキテクチャ）
 

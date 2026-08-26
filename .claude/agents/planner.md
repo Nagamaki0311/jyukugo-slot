@@ -23,5 +23,4 @@ model: opus
 - 不明点や仕様上の判断が必要な箇所は、勝手に決めつけず明示的に指摘する
 - 過剰に大きな計画にせず、要件に対して必要十分な粒度にとどめる
 - 外部情報の調査が必要な場合、調査対象と適切な検索チャネル（GitHub/Web/RSS/YouTube/Reddit/X等）を整理してManagerに提案する。大量の情報収集自体は行わない（researcher エージェントに委ねる。docs/research-workflow.md参照）。自身のWebFetch/WebSearchは、計画中に発生する軽微な確認（ライブラリのAPI仕様確認等）にとどめる
-- 利用可能なCapability（SessionStart Hookの出力。Managerから共有された結果）を踏まえて実行計画を作る（詳細はdocs/capability-layer.md参照）
-- 外部ライブラリのAPI仕様確認は、ManagerからHook検出結果でContext7（`ctx7`）が利用可能と共有されていれば優先利用し、共有がない・利用不可の場合はWebFetch/WebSearchへフォールバックする（自身でBashを実行できないため`command -v`による自己検出は行わない。docs/context7.md参照）
+- 利用可能なCapability（SessionStart Hookの出力。Managerから共有された結果）を踏まえて実行計画を作る（詳細はdocs/capability-layer.md参照）。現在Tier1のCapabilityは無いため、外部ライブラリのAPI仕様確認は自身のWebFetch/WebSearchで行う（Context7は現在Tier2（検出のみ、振る舞い未統合）のため本Agentの手順には組み込まない）

@@ -23,19 +23,18 @@ Capability Layerの本体は、以下の**Agentへの指示規約**である。`
 
 ### Tier1: 統合済み（Agentの振る舞いに組込み）
 
-| Capability | 検出コマンド | 利用するAgent | フォールバック | 詳細 |
-|---|---|---|---|---|
-| Agent-Reach | `command -v agent-reach`（詳細な健全性確認含め各docs参照） | Researcher | WebFetch/WebSearch | docs/agent-reach.md |
-| Code Review Graph | `command -v code-review-graph` | Developer, Reviewer | Read/Grep/Bashによる呼び出し元検索 | docs/code-review-graph.md |
-| Context7 | `command -v ctx7` | Planner, Developer, Reviewer, Researcher | Planner・Researcher→WebFetch/WebSearch、Developer・Reviewer→既存のRead/Grep/Bashによる調査（`tools`にWebFetch/WebSearchを持たないため） | docs/context7.md |
-| GitHub CLI (`gh`) | `command -v gh` | Researcher | WebFetch/WebSearch | 個別調査での`gh`活用はResearcherの既存フロー（WebFetch/WebSearch）に対する追加の情報源であり、専用docsは設けず本表とresearcher.mdの参照のみで完結させる |
+現在Tier1に該当するCapabilityはない。Agent-Reach/Code Review Graph/Context7/GitHub CLIの4件は、2026年公式仕様監査（T-020〜）で、動作未検証のまま複数セッションにわたり一度も検出されなかった実績が確認されたため、Tier2へ格下げした（D-021参照）。実際に検出・動作確認が取れた時点で、下記「新しいCapabilityを追加する手順」に沿って再度Tier1へ昇格させる。
 
 ### Tier2: 検出のみ（Agentの振る舞いには未組込み）
 
-`.claude/bootstrap.sh`の検出対象には含めるが、project001自体に消費するタスクがまだ具体化していないため、Agent定義ファイルへの振る舞い統合は行わない。
+`.claude/bootstrap.sh`の検出対象には含めるが、Agent定義ファイル（`.claude/agents/*.md`）・REVIEW.mdへの振る舞い統合は行わない。
 
 | Capability | 検出コマンド | 検出のみに留める理由 |
 |---|---|---|
+| Agent-Reach | `command -v agent-reach`（詳細はdocs/agent-reach.md参照） | 動作未検証のまま複数セッションで`unavailable`が続いており、Tier1（Researcherの振る舞いへの統合）は実際の検出実績が出るまで見送る（D-021） |
+| Code Review Graph | `command -v code-review-graph`（詳細はdocs/code-review-graph.md参照） | 同上（Developer/Reviewerへの統合を見送る） |
+| Context7 | `command -v ctx7`（詳細はdocs/context7.md参照） | 同上（Planner/Developer/Reviewer/Researcherへの統合を見送る）。サブコマンド仕様も本環境で未検証のまま |
+| GitHub CLI (`gh`) | `command -v gh` | 同上（Researcherへの統合を見送る） |
 | Node.js | `command -v node` | Context7 CLI（`ctx7`）の実行にNode.js 18+が前提となるため、関連ツールとして検出対象に含めている |
 | Python | `command -v python3` | Agent-Reach・Code Review GraphがいずれもpipでCLIを配布しているため、関連ツールとして検出対象に含めている |
 | Playwright | `command -v playwright` | project001自体にブラウザ操作対象のUIコードが存在しない。個別アプリのリポジトリでUIが実装された時点で、そちらでTier1へ昇格させる出発点として検出のみ用意している |
@@ -49,7 +48,7 @@ Capability Layerの本体は、以下の**Agentへの指示規約**である。`
 | Ponytail | AGENTS.mdの設計原則1〜8として本文へ統合済み（D-003、D-014）であり、`command -v`で検出する外部コマンドではないため検出対象にしない |
 | Claude Codeプラグイン全般 | project scopeでは既定で有効化しない。プラグインはユーザー個人のインストール状況に依存し、project001をコピーした派生プロジェクトすべてに強制されるべきものではないため。派生プロジェクトで有効化する場合は、`.claude/settings.json`にプラグインmarketplace/インストール設定を追加し（`enabledPlugins`等、Claude Code公式ドキュメントのキー構成に従う）、user scope（個人環境全体）ではなくproject scope（このリポジトリ配下のみ）に限定した上で、docs/capability-layer.mdに追加したプラグイン名と用途を記録する |
 
-個別アプリのリポジトリ（project001から作成された別リポジトリ）で、Tier2のツールを実際に使うタスクが発生した時点で、下記「新しいCapabilityを追加する手順」に沿ってTier1へ昇格させる。
+Tier2からTier1への昇格条件は2種類ある。Node.js/Python/Playwrightは、個別アプリのリポジトリ（project001から作成された別リポジトリ）で実際に使うタスクが発生した時点。Agent-Reach/Code Review Graph/Context7/GitHub CLIは、実行環境での検出・動作確認が取れた時点（D-021）。いずれも下記「新しいCapabilityを追加する手順」に沿ってTier1へ昇格させる。
 
 ## 新しいCapabilityを追加する手順
 
@@ -60,6 +59,8 @@ Capability Layerの本体は、以下の**Agentへの指示規約**である。`
 5. `docs/decisions.md`に記録する
 
 ## アーキテクチャ
+
+現在Tier1が空のため、以下の図はTier1昇格後に適用される検出・フォールバックの流れを示す（Tier2のままではAgent定義ファイルに振る舞いとして組み込まれない）。
 
 ```
 Agent起動時（Researcher/Developer/Reviewer）
