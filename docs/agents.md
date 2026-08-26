@@ -55,12 +55,50 @@ AGENTS.mdの「設計原則」を参照（判定ラダー、後方互換性を�
 
 ## Hook構成（`.claude/settings.json`）
 
-セッション継続性を技術的に担保するため、以下2つのHookを導入している。いずれも新規の外部依存関係は追加していない。Capability Layerの検出手順（`command -v`）は当初`.claude/settings.json`のHookコマンド文字列に標準shellコマンド1行として直接記述していたが、検出対象が増えるにつれ1行コマンドが線形に長大化したため、判定ラダー6段目（1行で書けるか）を再評価し`.claude/bootstrap.sh`という専用スクリプトへ切り出した（経緯の詳細はdocs/capability-layer.md参照）。
+セッション継続性・ドキュメント品質を技術的に担保するため、5種のHookを導入している。いずれも新規の外部依存関係は追加していない。Capability Layerの検出手順（`command -v`）は当初SessionStart Hookのコマンド文字列に直接列挙していたが、検出対象が増えて1行コマンドが長大化したため`.claude/bootstrap.sh`へ切り出した（判定ラダー6段目の再評価。経緯はdocs/capability-layer.md参照）。
 
-- **SessionStart**: セッション開始時に、`.claude/bootstrap.sh --check`によるCapability Layer（Agent-Reach・Code Review Graph・Context7・GitHub CLI等）の検出結果、`docs/tasks.md` のうち未完了タスク（状態列が`完了`の行を除外した行）、`docs/progress.md` の最新エントリを自動表示する。検出対象の追加・変更は`.claude/bootstrap.sh`の1箇所で完結し、`.claude/settings.json`側の変更は不要（`bootstrap.sh`が存在しない場合も`2>/dev/null`によりHook全体は失敗しない）。「セッション開始時にdocs/progress.md・docs/tasks.mdを確認する」という運用ルール（CLAUDE.md参照）を、手動確認任せにせず技術的に補助する。完了タスクを除外するのは、タスクが積み重なるにつれ完了行の表示コスト（トークン消費）が線形に増え続けるのを防ぐため。この除外は`awk -F'|'`で行を列分割した上で状態列（5列目）の値が`完了`かどうかを判定しており、備考欄など他の列に`完了`という文字列が含まれていても影響しない。`docs/tasks.md`のタスク一覧表の列構成（`| ID | タスク | 優先度 | 状態 | 担当エージェント | 備考 |`の6列）を前提とする。Capability検出の規約自体はdocs/capability-layer.mdを参照（本ファイルでは重複記載しない）。
-- **PreCompact**: コンテキスト圧縮の直前に、docs/progress.md・docs/tasks.mdへの記録を促すリマインダーを表示する。長時間セッションで未記録の作業がコンテキスト圧縮により失われることを防ぐ。
+### SessionStart
 
-いずれもコード（アプリケーションロジック）を持たないproject001に合わせ、状態の要約表示・記録の呼びかけに留めている。lintやビルド連携等のHook（PreToolUse/PostToolUse）は、project001自体にアプリケーションコードがなく対象がないため導入していない。個別アプリのリポジトリ側で必要になった場合はそちらで追加する。Stop Hook（応答終了ごとに発火）も検討したが、docs更新のタイミングとしては頻度が高すぎ、毎ターンのリマインダーはトークンの無駄になるため不採用とした。公式が示す「確定的なレビューゲート」としてのStop Hookも検討したが、pass/failを返すスクリプトが前提であり、アプリケーションコードを持たないproject001には機械判定可能なチェックが存在せず、REVIEW.mdの敵対的検証はLLMの判断でありスクリプト化できず、8回連続ブロックでClaude Codeが自動オーバーライドするため「確定的」な保証にもならない。ただし個別アプリのリポジトリではテスト・ビルド等の機械判定可能なチェックが存在するため、そちら側でStop Hookによる確定的ゲートを検討してよい。
+セッション開始時に3つを自動表示し、「docs/progress.md・docs/tasks.mdを確認する」運用ルール（CLAUDE.md参照）を手動確認任せにせず技術的に補助する。
+
+- `.claude/bootstrap.sh --check`によるCapability Layerの検出結果
+- `docs/tasks.md`の未完了タスク（状態列が`完了`の行を除外）
+- `docs/progress.md`の最新エントリ
+
+検出対象の追加・変更は`.claude/bootstrap.sh`の1箇所で完結し、`.claude/settings.json`側の変更は不要（`bootstrap.sh`が存在しなくても`2>/dev/null`によりHook全体は失敗しない）。完了タスクの除外は、積み重なるほど表示コスト（トークン消費）が線形に増えるのを防ぐため。`awk -F'|'`で行を列分割し状態列（5列目）を判定しており、備考欄に含まれる「完了」という文字列には影響されない。`docs/tasks.md`のタスク一覧表の列構成（`| ID | タスク | 優先度 | 状態 | 担当エージェント | 備考 |`の6列）を前提とする。Capability検出の規約自体はdocs/capability-layer.mdを参照（本ファイルでは重複記載しない）。
+
+### PreCompact
+
+コンテキスト圧縮の直前に、docs/progress.md・docs/tasks.mdへの記録を促すリマインダーを表示する。長時間セッションで未記録の作業がコンテキスト圧縮により失われることを防ぐ。
+
+SessionStart/PreCompactは、コード（アプリケーションロジック）を持たないproject001に合わせ、状態の要約表示・記録の呼びかけに留めている。
+
+### PostToolUse
+
+`Write`/`Edit`で`.md`ファイルへの書き込み直後に`.claude/hooks/ja-style-check.py`を実行する。
+
+- 検査対象: `.claude/ja-style-rules.json`のNGパターン（「効く」の一語で済ませる曖昧な効果表現、依頼されていない対比構文）、文末表現（ます・です等）の3文以上連続
+- 該当時: `exit code 2`でエージェント自身へ差し戻す。単語だけの置き換えは禁止し、該当文全体の書き直しを求める（グッドパターンの例も併記する）
+- ルールは`.claude/ja-style-rules.json`への追記のみで拡張できる（D-017参照）
+
+project001自体にアプリケーションコードは無いが、AIが生成するdocs/配下のドキュメントという明確な対象がある点でlint/ビルド連携用のPostToolUse Hookとは事情が異なる。lintやビルド連携等、対象コードが存在しないPostToolUse Hookは引き続き導入していない（個別アプリのリポジトリ側で必要になった場合はそちらで追加する）。
+
+### SubagentStop
+
+サブエージェント完了時に`.claude/hooks/subagent-doc-check.py`を実行する。
+
+- `agent_type`が`developer`の場合のみ、`git status --porcelain -- docs/progress.md`でdocs/progress.mdに未コミットの変更があるかを確認し、無ければ`exit code 2`で「完了報告の前にdocs/progress.mdへ記録すること」を差し戻す
+- 他のAgentタイプ（Planner/Reviewer/Researcher）はmatcherを絞らずスクリプト内で`agent_type`を判定し、該当しなければ無反応（`exit code 0`）
+
+「docs/progress.md: 作業履歴、次回開始位置（Developerが記録）」という運用ルール（本ファイル冒頭の参照ドキュメント表）が、指示文だけでなく機械的にも守られるようにする（D-018参照）。
+
+### SessionEnd
+
+セッション終了時に、リポジトリ全体で未コミットの変更（`git status --porcelain`）があるかを確認し、あれば「docs/progress.md・docs/tasks.mdへの記録漏れがないか確認しcommit/pushしてください」とリマインドする。未コミットの変更が無ければ無反応。PreCompactは圧縮が発生した場合のみ発火するため、圧縮を経ずにセッションが終了するケース（`/clear`等）を補完する（D-018参照）。
+
+### Stop Hookを不採用とした理由
+
+docs更新のタイミングとしては頻度が高すぎ、毎ターンのリマインダーはトークンの無駄になるため不採用とした。公式が示す「確定的なレビューゲート」としてのStop Hookも検討したが、pass/failを返すスクリプトが前提であり、アプリケーションコードを持たないproject001には機械判定可能なチェックが存在せず、REVIEW.mdの敵対的検証はLLMの判断でありスクリプト化できず、8回連続ブロックでClaude Codeが自動オーバーライドするため「確定的」な保証にもならない。ただし個別アプリのリポジトリではテスト・ビルド等の機械判定可能なチェックが存在するため、そちら側でStop Hookによる確定的ゲートを検討してよい。
 
 ### 運用上の注意（環境依存）
 
@@ -71,3 +109,16 @@ AGENTS.mdの「設計原則」を参照（判定ラダー、後方互換性を�
 ## Status Line構成（`.claude/settings.json`）
 
 `subagentStatusLine`により、サブエージェント実行時のみエージェントパネルに進捗を日本語で表示する（`.claude/statusline-subagent.sh`、新規依存なし）。Hookとは異なり会話コンテキストへは注入されないため、LLMトークンを消費しない。stdinスキーマ・出力形式・実装時に発見した問題（マルチバイト文字のtruncationバグ等）の詳細はdocs/status-line.mdを参照（本ファイルでは重複記載しない）。
+
+## Auto Memoryとの役割分担
+
+Claude Codeには、Claude自身が訂正・学習をリポジトリごとの`MEMORY.md`へ自動で記録するAuto Memory機能があり、毎セッション自動でロードされる（project001が明示的に組み込む設定ではなく、Claude Code本体の標準機能）。project001のdocs/tasks.md・docs/progress.md・docs/decisions.mdはこれとは別の、D-001（Auto Memory登場以前）由来の独自運用である。両者は以下のように役割が異なり、置き換え関係ではない。
+
+| | Auto Memory | docs/tasks.md・progress.md・decisions.md |
+|---|---|---|
+| 記録主体 | Claude自身が自動判断 | Manager/Developerが都度追記（AGENTS.mdワークフロー） |
+| 記録内容 | 個人的な気づき・訂正・好みの学習 | タスク状態・作業履歴・設計判断（ADR形式） |
+| 正式な記録か | 非公式（PRレビューを経ない） | 公式（PR経由でリポジトリにコミットされる） |
+| 一貫性の担保 | なし（Claudeの裁量） | REVIEW.mdの敵対的検証、SubagentStop/SessionEnd Hookで機械的に補強 |
+
+docs/配下の運用（設計判断の正式な記録、タスクの状態管理）を縮小したりAuto Memoryへ委譲したりする変更は行わない。Auto Memoryは横で自動的に動く別レイヤーとして扱い、docs/配下と重複する内容を意図的にAuto Memoryへ書き込む運用も行わない。

@@ -17,6 +17,5 @@ model: sonnet
 - コードの変更は行わない(指摘と提案に専念し、修正は developer エージェントに委ねる)
 - 過剰な抽象化・不要な依存追加・不要なボイラープレートがないか、AGENTS.md の設計原則に沿って確認する
 - 対象がMarkdown/README/docsの体裁確認など軽量なレビューの場合、Manager側の判断でこのAgentは軽量モデル（例: haiku）を指定して起動されることがある。コード品質・セキュリティに関わるレビューでは、この方針(sonnet)を前提とする
-- researcher エージェントが関与したタスクでは、実装だけでなく調査結果の妥当性も確認する: 情報源が適切か、情報が最新か、重複取得がないか、Agent-Reach利用可否で品質差が出ていないか（docs/research-workflow.md参照）。不十分な場合は追加調査をManagerへ要求する
-- Code Review Graphが利用可能な場合、影響範囲解析を回帰・依存関係の確認に用いる（詳細はdocs/code-review-graph.md参照）
-- 指摘の裏付け（実際のAPI仕様と実装の食い違いの確認等）にはContext7（`ctx7`）が利用可能なら優先利用し、不可なら既存のRead/Grep/Bashによる調査に留める（docs/context7.md参照）
+- researcher エージェントが関与したタスクでは、実装だけでなく調査結果の妥当性も確認する: 情報源が適切か、情報が最新か、重複取得がないか（docs/research-workflow.md参照）。不十分な場合は追加調査をManagerへ要求する
+- 回帰・依存関係の確認、指摘の裏付け（実際のAPI仕様と実装の食い違いの確認等）はRead/Grep/Bashによる調査で行う（Code Review Graph/Context7は現在Tier2（検出のみ、振る舞い未統合）のため、本Agentの手順には組み込まない。docs/capability-layer.md参照）

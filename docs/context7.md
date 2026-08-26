@@ -2,6 +2,8 @@
 
 project001はContext7（[upstash/context7](https://github.com/upstash/context7)、MIT License）をOptional Dependencyとして扱う。project001自体はContext7への依存を持たず、実行環境にインストールされている場合のみPlanner/Developer/Reviewer/Researcherが活用する。
 
+**現在Tier2（検出のみ）**: 動作未検証（サブコマンド仕様も含む）のまま複数セッションで`unavailable`が続いているため、`.claude/agents/*.md`への振る舞い統合は見送っている（docs/capability-layer.md、D-021参照）。以下は検出・動作確認が取れた際にTier1へ昇格する場合の利用方針として残す。
+
 ## Context7とは
 
 - ライブラリの最新の公式ドキュメント・型定義をLLMのコンテキストへ取得するツール。学習データの古さやAPIのバージョン違いによる誤った実装・レビューを防ぐことを目的とする。
@@ -31,8 +33,7 @@ Plannerは`tools`フロントマターにBashを持たず自身で`command -v`�
 
 ## フォールバック方針
 
-- `ctx7`の呼び出しが失敗した場合も、その場でWebFetch/WebSearchに切り替え、タスク全体を止めない。
-- project001のいかなるAgentも、Context7の存在を前提とした処理を書かない。「あれば使う、なければ今まで通り」を徹底する。
+`ctx7`の呼び出しが失敗した場合も、その場でWebFetch/WebSearchに切り替え、タスク全体を止めない（一般原則はdocs/capability-layer.md参照）。
 
 ## MCP版を統合しない理由
 

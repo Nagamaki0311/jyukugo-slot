@@ -19,9 +19,14 @@
 
 ## Skills / Capability Layer
 
-project001は、利用可能な外部ツールを自動検出し、あれば優先利用・なければ既存フローへフォールバックする共通規約（Capability Layer）を持つ。project001自体はいずれのツールにも依存しない（本リポジトリに依存の追記はしない）。現在統合済みのCapabilityは [Agent-Reach](https://github.com/Panniantong/Agent-Reach)（Researcher）、Code Review Graph（Developer/Reviewer）、[Context7](https://github.com/upstash/context7)（Planner/Developer/Reviewer/Researcher）、GitHub CLI `gh`（Researcher）の4つ。検出は`.claude/bootstrap.sh`（案内のみ、インストールは行わない）に集約し、SessionStart Hook経由でManagerへ結果を共有する。検出規約はdocs/capability-layer.mdに、ツール固有の詳細はdocs/agent-reach.md・docs/code-review-graph.md・docs/context7.mdにそれぞれ記載し、他へ複製しない。Claude Codeプラグインはproject scopeで既定有効化しない（詳細はdocs/capability-layer.md参照）。
+project001は、利用可能な外部ツールを自動検出し、あれば優先利用・なければ既存フローへフォールバックする共通規約（Capability Layer）を持つ。project001自体はいずれのツールにも依存しない（本リポジトリに依存の追記はしない）。
 
-Skills（`.claude/skills/`配下のSKILL.md）は、再利用可能な具体的ワークフローが確認された時点で追加する。SKILL.md本文はSkillツール呼び出し時のみ読み込まれるが、1行説明は`.claude/skills/`配下の全Skillぶん毎セッション常時ロードされるため、確認を経ず追加したSkillは関連タスクでの起動実績を見て刈り込む。現在導入済みのSkillは`Leonxlnx/taste-skill`由来の13件（デザイン/UI系、確認プロセスを経ない例外追加、PR #16参照）。
+- 現在Tier1（Agentの振る舞いに統合済み）のCapabilityはない。[Agent-Reach](https://github.com/Panniantong/Agent-Reach)、Code Review Graph、[Context7](https://github.com/upstash/context7)、GitHub CLI `gh`の4つは動作未検証のままTier2（検出のみ）に格下げしている（D-021参照）
+- 検出は`.claude/bootstrap.sh`（案内のみ、インストールは行わない）に集約し、SessionStart Hook経由でManagerへ結果を共有する
+- 検出規約はdocs/capability-layer.mdに、ツール固有の詳細はdocs/agent-reach.md・docs/code-review-graph.md・docs/context7.mdにそれぞれ記載し、他へ複製しない
+- Claude Codeプラグインはproject scopeで既定有効化しない（詳細はdocs/capability-layer.md参照）
+
+Skills（`.claude/skills/`配下のSKILL.md）は、再利用可能な具体的ワークフローが確認された時点で追加する。SKILL.md本文はSkillツール呼び出し時のみ読み込まれるが、1行説明は`.claude/skills/`配下の全Skillぶん毎セッション常時ロードされるため、確認を経ず追加したSkillは関連タスクでの起動実績を見て刈り込む。現時点で導入しているSkillはない（2026年公式監査でデザイン/UI系Skill13件を撤去した。D-019参照）。
 
 ## 進捗の可視化
 

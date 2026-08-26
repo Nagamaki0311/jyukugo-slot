@@ -1,6 +1,6 @@
 # 調査ワークフロー
 
-外部情報の調査が必要なタスクにおける、Planner→Researcher→Developer→Reviewerの流れを定める。Agent-Reachの検出規約は、docs/capability-layer.mdで一般化されたCapability Layerの規約に従う。
+外部情報の調査が必要なタスクにおける、Planner→Researcher→Developer→Reviewerの流れを定める。Capability Layerの規約はdocs/capability-layer.mdを参照（Agent-Reachは現在Tier2で、本ワークフローには組み込まれていない）。
 
 ## いつResearcherを使うか
 
@@ -10,7 +10,7 @@ Managerは、Plannerの計画に外部情報の裏付けが必要と判断され
 
 1. **Planner**: 何を調べる必要があるか（調査対象）と、どのチャネル（GitHub/Web/RSS/YouTube/Reddit/X等）が適切かを整理し、Managerに提案する。実際の情報収集は行わない。
 2. **Manager**: 提案を踏まえResearcherを起動するか判断する。
-3. **Researcher**: Agent-Reachの利用可否を確認（docs/agent-reach.md）した上で、優先チャネルから情報収集する。
+3. **Researcher**: WebFetch/WebSearchで情報収集する（Agent-Reachは現在Tier2のため組み込まない。Tier1昇格後の利用方法はdocs/agent-reach.md参照）。
    - 複数ソースから得た情報の重複を除去する
    - 情報源の信頼性（一次情報か、更新日時、著者/組織の実在性等）を評価する
    - 結果を出典（URL・取得日時）付きで要約し、Managerに返す。生の検索結果は会話コンテキストに残さない
@@ -22,7 +22,6 @@ Managerは、Plannerの計画に外部情報の裏付けが必要と判断され
 - 情報源が適切か（一次情報・公式ドキュメントが優先されているか）
 - 情報が最新か（古い情報に基づいていないか）
 - 重複取得がないか（同じ情報を複数チャネルから冗長に集めていないか）
-- Agent-Reach利用可否によって成果物の品質に差が出ていないか（未導入環境でも同等の結論に到達できる調査になっているか）
 - 不十分な場合はManagerへ差し戻し、追加調査を要求する（修正ループはAGENTS.md参照）
 
 ## トークン効率
