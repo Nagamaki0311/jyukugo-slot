@@ -19,6 +19,7 @@
 | T-002 | T-001成果物のレビュー指摘・QA発見バグの修正 | 中 | 完了 | claude | reviewer AgentのレビューとPlaywright QAで見つかった3件（SVG要素のhidden属性未反映、ripple演出がマス境界外へはみ出す、score-value-gain演出のタイマー競合）を修正（D-002参照） |
 | T-003 | 長時間プレイでのDOM/メモリリーク検証 | 低 | 完了 | claude | 45スピン連続プレイ（ゲームオーバー到達時はリプレイで継続）をPlaywrightで実施し、DOMノード数・JSヒープサイズ・effect-layer/banner-layerの残留要素を計測。増加傾向なし、アプリ起因のエラーなしを確認。コード変更なし（検証のみ） |
 | T-004 | GameEngineの所持金・スコアロジックに自動回帰テストを追加 | 中 | 完了 | claude | test/gameEngine.test.mjs（node:test、追加依存なし）を新設。D-001のスコア表示バグの契約（spinning中のみspinScoreを加算）・所持金の増減・ゲームオーバー条件をコードで固定（D-003参照） |
+| T-005 | JudgeEngineのスコア計算式に自動回帰テストを追加 | 低 | 完了 | claude | test/judgeEngine.test.mjs を新設。通常役/端役(weight 1.0/0.5)の重み付けスコア式、辞書不一致時の非成立、重複成立防止(_confirmedPairs)をコードで固定（D-003参照、追加依存なし） |
 
 ## バックログ（未着手・優先度未確定）
 
