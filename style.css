@@ -440,6 +440,16 @@ body {
   transition: background-color 0.3s ease;
 }
 
+/* タップ波紋(.ripple)専用のクリップ層。マス境界ちょうどでoverflow:hiddenする
+   ことで、隣接マス（gap:0で密着）へ波紋がはみ出して見えるのを防ぐ。
+   cell-charのポップ演出はこの層の外（.cellの直接の子）にあるため影響しない。 */
+.cell-ripple-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .cell-char {
   display: inline-block;
   font-family: var(--font-display);

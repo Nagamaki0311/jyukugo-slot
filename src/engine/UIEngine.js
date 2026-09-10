@@ -140,6 +140,13 @@ export class UIEngine {
       charEl.className = "cell-char";
       cell.appendChild(charEl);
 
+      // タップ波紋(ripple)専用のクリップ層。.cell自体にoverflow:hiddenを
+      // 付けると、成立時にcell-charをマス境界の外まで拡大させるポップ演出
+      // （既存仕様）まで切り取ってしまうため、波紋だけをこの層に閉じ込める。
+      const rippleLayerEl = document.createElement("span");
+      rippleLayerEl.className = "cell-ripple-layer";
+      cell.appendChild(rippleLayerEl);
+
       grid.appendChild(cell);
       this._cellElements.push(cell);
       this._cellCharElements.push(charEl);
@@ -158,7 +165,7 @@ export class UIEngine {
       cell.addEventListener("pointerdown", (e) => {
         this._lastCellPointerType = e.pointerType;
         if (e.pointerType !== "mouse" && cell.tabIndex === 0) {
-          this.animationEngine.spawnRipple(cell, e.clientX, e.clientY);
+          this.animationEngine.spawnRipple(rippleLayerEl, e.clientX, e.clientY);
         }
       });
       cell.addEventListener("click", (e) => {
@@ -272,7 +279,11 @@ export class UIEngine {
       const panel = this.root.querySelector('[data-role="debug-panel"]');
       panel.hidden = !this._debugVisible;
       const overlay = this.root.querySelector('[data-role="judge-lines-overlay"]');
-      overlay.hidden = !this._debugVisible;
+      // overlayはSVG要素のため、.hidden = falseを代入してもDOM上のhidden属性が
+      // 除去されないことがある（HTMLElementと異なりIDLプロパティが属性へ
+      // 反映されないブラウザ実装がある）。toggleAttributeで属性そのものを
+      // 明示的に操作することで確実に反映させる。
+      overlay.toggleAttribute("hidden", !this._debugVisible);
       this._onSettingsChanged?.({ debug: this._debugVisible });
     });
 
@@ -308,7 +319,7 @@ export class UIEngine {
     const overlay = this.root.querySelector('[data-role="judge-lines-overlay"]');
     toggle.checked = visible;
     panel.hidden = !visible;
-    overlay.hidden = !visible;
+    overlay.toggleAttribute("hidden", !visible);
   }
 
   setSpinButtonEnabled(enabled) {
@@ -379,12 +390,38 @@ export class UIEngine {
     moneyItem.appendChild(popup);
     setTimeout(() => popup.remove(), 900);
 
-    if (amount > 0 && moneyEl) {
-      moneyEl.classList.remove("score-value-gain");
-      void moneyEl.offsetWidth;
-      moneyEl.classList.add("score-value-gain");
-      setTimeout(() => moneyEl.classList.remove("score-value-gain"), 600);
+    if (amount > 0) {
+      this._flashGain(moneyEl);
     }
+  }
+
+  /**
+   * スコア/所持金の値が加算された瞬間の発光演出(.score-value-gain)を
+   * 再トリガーする。setTimeoutで固定時間後にクラスを外す方式だと、
+   * アニメーション時間内に連続でヒットした場合（コンボ等）、先に積んだ
+   * タイマーが後発のアニメーション中にクラスを誤って剥がしてしまう
+   * （演出が本来より早く途切れる）。animationendを使うことで、
+   * 常に「そのときの」アニメーションインスタンスの終了を待ってから
+   * 外すようにし、この競合を避ける（remove→reflow→addで前のインスタンスを
+   * 中断した場合はanimationendが発火しないため、古いリスナーが誤発火する
+   * こともない）。
+   * @param {HTMLElement | null | undefined} el
+   */
+  _flashGain(el) {
+    if (!el) return;
+    // prefers-reduced-motionではCSS側がanimation: noneで無効化するため
+    // animationendが発火せず、クラスが外れないまま残留してしまう。
+    // その環境ではそもそも演出が見えないため、クラス付与自体を行わない。
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) return;
+
+    el.classList.remove("score-value-gain");
+    void el.offsetWidth;
+    el.classList.add("score-value-gain");
+    el.addEventListener("animationend", () => el.classList.remove("score-value-gain"), {
+      once: true,
+    });
   }
 
   /**
@@ -493,13 +530,7 @@ export class UIEngine {
     this.animationEngine.playHit(hit.results.flatMap((r) => [r.a, r.b]));
     this.animationEngine.playScorePopup(hit.results, hit.score);
 
-    const scoreEl = this.root.querySelector('[data-role="current-score"]');
-    if (scoreEl) {
-      scoreEl.classList.remove("score-value-gain");
-      void scoreEl.offsetWidth;
-      scoreEl.classList.add("score-value-gain");
-      setTimeout(() => scoreEl.classList.remove("score-value-gain"), 600);
-    }
+    this._flashGain(this.root.querySelector('[data-role="current-score"]'));
 
     // コンボ演出は「熟語の成立が連鎖しているか」で数えるcomboCountを使う。
     // 1コンボ（連鎖の起点となる最初の1語）では演出を出さず、2コンボ以上から表示する。

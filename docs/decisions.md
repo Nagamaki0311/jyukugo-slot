@@ -44,3 +44,30 @@
 - 経済シミュレーション用コメント（GameEngine.js冒頭のSPIN_COST/SCORE_TO_MONEY_RATE等の調整根拠）や既存のtest/verify_*.js（リポジトリには同梱されていないコメント記載のみ）には影響しない。
 - 表示のみの修正のため、既存のrecordSpinResult・リザルト画面（sessionScoreを直接参照）には影響がないことを確認済み。
 
+---
+
+## D-002: T-001成果物のレビュー指摘・QA発見バグの修正方針
+
+- 日付: 2026-09-10
+- 状態: 採用
+
+### 背景
+- T-001（デザイン刷新・所持金/スコア表示バグ修正）のマージ後、reviewer Agentによる敵対的レビューとPlaywrightによる実ブラウザQAを追加で実施し、以下3件の不具合を発見した。
+  1. （QAで発見）デバッグモードのトグルで`judge-lines-overlay`（`<svg>`要素）が表示されない。`element.hidden = false`はHTMLElementでは属性の除去に反映されるが、SVGElementでは反映されないブラウザ実装があり、`hidden`属性が残ったままCSSの`[hidden] { display: none }`が効き続けていた。
+  2. （reviewer Agentが発見、CONFIRMED）タップ波紋(ripple)演出が、マス（`.cell`、`gap: 0`で隣接マスと密着）の境界からはみ出して隣のマスの上に視覚的に重なる。
+  3. （reviewer Agentが発見、PLAUSIBLE）スコア/所持金加算時の発光演出（`.score-value-gain`）を600ms以内に連続発火させると、先に積んだ`setTimeout`が後発のアニメーション中にクラスを誤って剥がし、演出が本来より早く途切れる場合がある。
+
+### 決定
+1. `overlay.hidden = boolean`の代入を`overlay.toggleAttribute("hidden", boolean)`に置き換える（`UIEngine.js`の該当2箇所）。
+2. `.cell`自体に`overflow: hidden`を付けるのではなく、ripple専用のクリップ層（`.cell-ripple-layer`、`.cell`の子として追加）を新設し、そこへrippleを生成するよう変更する。
+3. `setTimeout`による固定時間後のクラス除去を廃し、`animationend`イベントでクラスを外す共通ヘルパー`UIEngine#_flashGain()`を新設し、`onHit()`・`playMoneyPopup()`の両方から呼ぶよう統一する。ただし`prefers-reduced-motion`環境ではCSS側で`animation: none`となり`animationend`が発火しないため、その環境ではクラス付与自体を行わないガードを追加する。
+
+### 理由
+1. `toggleAttribute`はSVG/HTML問わずElement共通で属性を直接操作するため、IDLプロパティの反映有無というブラウザ実装差異を回避できる。
+2. `.cell`に`overflow: hidden`を付けると、既存仕様である成立時ポップ演出（`cell-char`をマス境界の外まで拡大させる、既存コードコメントに明記された意図的な演出）まで切り取ってしまう回帰を招くため、影響範囲を波紋のみに限定する専用レイヤーを追加する方が安全（判定ラダー: 既存コードベースに同等の実装がないため最小の新規要素を追加）。
+3. `animationend`はCSS側の実際のアニメーション時間と常に同期するため、JS側に600msという重複したマジックナンバーを持たずに済み、複数呼び出しが競合しても「最後に開始したアニメーションの終了」を正しく待てる（remove→reflow→addで前のアニメーションインスタンスを中断した場合、中断されたインスタンスの`animationend`は発火しない）。
+
+### 影響
+- いずれもUIEngine.js/style.cssの局所的な修正であり、GameEngine.js等のゲームロジックには影響しない。
+- Playwright QA（プレイヤーからの入力・reduced-motion・レース条件の再現テスト含む）で再現・修正の両方を確認済み。
+

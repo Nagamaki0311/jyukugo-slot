@@ -19,6 +19,28 @@
 
 ---
 
+## 2026-09-10 T-002: T-001成果物のレビュー指摘・QA発見バグの修正
+
+### 実施内容
+- ユーザーが8時間就寝する間の夜間作業として、T-001（デザイン刷新・スコア表示バグ修正、PR#3としてマージ済み）の成果物を追加で検証した。
+- reviewer Agentをバックグラウンドで起動し、直近2コミットの差分（origin/main基準、project001同期コミット652080bも含めて確認）を敵対的レビューさせた。並行してPlaywrightによる実ブラウザQA（reduced-motion、連打時の多重起動防止、キーボード操作・フォーカストラップ、iPhone SE幅でのレイアウト、localStorage永続化、デバッグモード切替、15連続スピンでのエラー有無）を自ら実施した。
+- 発見した3件を修正した：
+  1. QAで発見: デバッグモードのトグルで`judge-lines-overlay`（SVG）が表示されない。`element.hidden = false`がSVGElementでは属性除去に反映されないブラウザ実装に起因していた。`UIEngine.js`の該当2箇所を`toggleAttribute("hidden", ...)`に置き換えて修正。
+  2. reviewer Agentが発見（CONFIRMED）: タップ波紋(ripple)がマス境界からはみ出し隣接マスに重なる。`.cell`へ`overflow: hidden`を付けると既存の成立時ポップ演出（マス境界外への拡大、意図的な仕様）まで切り取ってしまうため、ripple専用のクリップ層`.cell-ripple-layer`を新設して対応。
+  3. reviewer Agentが発見（PLAUSIBLE）: `score-value-gain`演出の`setTimeout`ベースのクラス除去が、600ms以内の連続発火（コンボ等）でレースし演出が早期に途切れる恐れ。`animationend`イベントで外す共通ヘルパー`_flashGain()`に統一し、`onHit()`・`playMoneyPopup()`双方から呼ぶよう変更。`prefers-reduced-motion`ではCSS側で`animation: none`となり`animationend`が発火しないため、その環境ではクラス付与自体をスキップするガードも追加した。
+- 詳細な背景・判断理由はD-002（`docs/decisions.md`）に記録した。
+
+### 結果
+- SVG hidden属性の修正: Playwrightで`hasAttribute("hidden")`が正しくtrue/falseを切り替えることを確認（修正前はtoggle後もtrueのまま残留していた）。
+- rippleクリップ層: `.cell-ripple-layer`の`overflow`計算値が`hidden`であること、タップでripple要素がそのレイヤー内に生成されることをPlaywrightのタッチイベント経由で確認。
+- `_flashGain`レース修正: `_flashGain`を200ms間隔で2回連続呼び出すシミュレーションで、700ms時点（1回目基準なら消えているはずの時点）でもクラスが残り、900ms時点（2回目基準の600ms経過後）で正しく消えることを確認。reduced-motion環境ではクラス自体が付与されず残留しないことも確認。
+- 修正後、初回のPlaywright QAスイート（reduced-motion／連打防止／キーボード操作・フォーカストラップ／iPhone SE幅／localStorage永続化／デバッグモード切替／15連続スピン）を再実行し、全12項目合格を確認した（修正前はデバッグモード切替のみNGだった）。
+
+### 次回開始位置
+- 特になし。git commit/pushはManagerが別途行う。
+
+---
+
 ## 2026-08-11 T-001: デザイン刷新および所持金・スコア二重消費バグの修正
 
 ### 実施内容
