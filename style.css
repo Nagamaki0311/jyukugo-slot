@@ -1206,7 +1206,11 @@ body {
   font-family: var(--font-display);
   font-size: 0.8rem;
   letter-spacing: 0.3em;
-  color: var(--color-ki);
+  /* --color-ki(#8b6e4e)は背景(--color-washi)に対しWCAG AA(4.5:1、小さめ文字の
+     基準)を3.95:1で満たさないため、同系色でより暗い値を使う。
+     --color-ki自体は枠線・装飾罫線でも使われており(text以外はコントラスト
+     基準の対象外)、そちらの見た目を変えないためトークン自体は変更しない。 */
+  color: #765e42;
   margin: 0 0 4px;
 }
 
