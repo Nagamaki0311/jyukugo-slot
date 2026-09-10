@@ -71,3 +71,27 @@
 - いずれもUIEngine.js/style.cssの局所的な修正であり、GameEngine.js等のゲームロジックには影響しない。
 - Playwright QA（プレイヤーからの入力・reduced-motion・レース条件の再現テスト含む）で再現・修正の両方を確認済み。
 
+---
+
+## D-003: テストフレームワークを導入せずNode.js標準のnode:testで回帰テストを追加する
+
+- 日付: 2026-09-10
+- 状態: 採用
+
+### 背景
+- 本リポジトリには自動テストが一つも存在しなかった。`GameEngine.js`冒頭のコメントは`test/verify_integration.js`等のシミュレーションスクリプトを根拠として経済パラメータ（SPIN_COST・SCORE_TO_MONEY_RATE等）の調整理由を説明しているが、これらのファイルは実体としてコミットされていない。
+- T-001で修正した表示バグ（D-001参照）は、GameEngineが公開する状態（`sessionScore`・`spinScore`・`spinning`）の意味的な契約をUIEngine側が誤解していたことに起因する。この契約は今後もGameEngine側の実装変更（例: `_settleSpin()`のタイミング変更）によって静かに破られうる。
+
+### 決定
+- Vitest/Jest等のテストフレームワークやビルドツールは導入せず、Node.js標準の`node:test`・`node:assert/strict`のみを使い、`test/gameEngine.test.mjs`を新設する。
+- テスト対象はGameEngineの所持金・スコア関連の状態遷移（`startSpin`・`_settleSpin`・`resetSession`・ゲームオーバー条件）と、UIEngine.render()が依存する表示契約（スピン中のみspinScoreを加算する）の両方とする。
+- `README.md`に実行方法（`node --test`）を追記する。
+
+### 理由
+- 判定ラダー（AGENTS.md）に従い、まず「そもそも必要か」を検討した。本リポジトリはビルドツールを一切使わない素のESM構成であり、フレームワーク追加は依存関係・設定ファイルの増加を伴う。Node.js 18以降で標準搭載されている`node:test`で要件（アサーション・グルーピング・CLI実行）を満たせるため、既存の実行環境（本番はブラウザ、開発はNode）に新たな依存を追加しない選択をした。
+- GameEngineはDOM等のブラウザAPIに依存しない純粋なクラス群（RandomEngine/DictionaryEngine/ReelEngine/JudgeEngine/GameEngine）であるため、Node上で直接importしてテストできる。UIEngine.jsはDOM操作を伴うためテスト対象から除外し、代わりにUIEngine.render()が依存する「スピン中のみspinScoreを加算する」という契約をGameEngineの状態に対するアサーションとして固定することで、UIEngine側の実装を変更せずに同等の回帰保護を得ている。
+
+### 影響
+- 新規ファイル`test/gameEngine.test.mjs`の追加のみ。既存のゲームロジック・UIコードへの変更はない。
+- `node --test`で8件すべて合格することを確認済み。
+
