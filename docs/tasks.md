@@ -18,6 +18,7 @@
 | T-001 | デザイン刷新および所持金・スコア二重消費バグの修正 | 高 | 完了 | claude | UIEngine.render()のスコア表示式がスピン終了後もspinScoreを二重加算していた表示バグを修正（GameEngine自体は元々正しい）。style.css/AnimationEngine.jsを中心にビジュアル・演出を強化（D-001参照） |
 | T-002 | T-001成果物のレビュー指摘・QA発見バグの修正 | 中 | 完了 | claude | reviewer AgentのレビューとPlaywright QAで見つかった3件（SVG要素のhidden属性未反映、ripple演出がマス境界外へはみ出す、score-value-gain演出のタイマー競合）を修正（D-002参照） |
 | T-003 | 長時間プレイでのDOM/メモリリーク検証 | 低 | 完了 | claude | 45スピン連続プレイ（ゲームオーバー到達時はリプレイで継続）をPlaywrightで実施し、DOMノード数・JSヒープサイズ・effect-layer/banner-layerの残留要素を計測。増加傾向なし、アプリ起因のエラーなしを確認。コード変更なし（検証のみ） |
+| T-004 | GameEngineの所持金・スコアロジックに自動回帰テストを追加 | 中 | 完了 | claude | test/gameEngine.test.mjs（node:test、追加依存なし）を新設。D-001のスコア表示バグの契約（spinning中のみspinScoreを加算）・所持金の増減・ゲームオーバー条件をコードで固定（D-003参照） |
 
 ## バックログ（未着手・優先度未確定）
 
