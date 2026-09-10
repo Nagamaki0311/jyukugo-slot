@@ -83,8 +83,8 @@
 - T-001で修正した表示バグ（D-001参照）は、GameEngineが公開する状態（`sessionScore`・`spinScore`・`spinning`）の意味的な契約をUIEngine側が誤解していたことに起因する。この契約は今後もGameEngine側の実装変更（例: `_settleSpin()`のタイミング変更）によって静かに破られうる。
 
 ### 決定
-- Vitest/Jest等のテストフレームワークやビルドツールは導入せず、Node.js標準の`node:test`・`node:assert/strict`のみを使い、`test/gameEngine.test.mjs`を新設する。
-- テスト対象はGameEngineの所持金・スコア関連の状態遷移（`startSpin`・`_settleSpin`・`resetSession`・ゲームオーバー条件）と、UIEngine.render()が依存する表示契約（スピン中のみspinScoreを加算する）の両方とする。
+- Vitest/Jest等のテストフレームワークやビルドツールは導入せず、Node.js標準の`node:test`・`node:assert/strict`のみを使い、`test/gameEngine.test.mjs`を新設する。同じ方針で、配当額に直結するもう一つの中核ロジックとして`test/judgeEngine.test.mjs`（スコア計算式の重み付け、成立判定、重複成立防止）も新設する（T-005）。
+- テスト対象はGameEngineの所持金・スコア関連の状態遷移（`startSpin`・`_settleSpin`・`resetSession`・ゲームオーバー条件）、UIEngine.render()が依存する表示契約（スピン中のみspinScoreを加算する）、およびJudgeEngineのスコア計算式（`score = round(100 * (2^n-1) * (weightSum/n))`、通常役/端役の重み付け）とする。
 - `README.md`に実行方法（`node --test`）を追記する。
 
 ### 理由
@@ -92,6 +92,6 @@
 - GameEngineはDOM等のブラウザAPIに依存しない純粋なクラス群（RandomEngine/DictionaryEngine/ReelEngine/JudgeEngine/GameEngine）であるため、Node上で直接importしてテストできる。UIEngine.jsはDOM操作を伴うためテスト対象から除外し、代わりにUIEngine.render()が依存する「スピン中のみspinScoreを加算する」という契約をGameEngineの状態に対するアサーションとして固定することで、UIEngine側の実装を変更せずに同等の回帰保護を得ている。
 
 ### 影響
-- 新規ファイル`test/gameEngine.test.mjs`の追加のみ。既存のゲームロジック・UIコードへの変更はない。
+- 新規ファイル`test/gameEngine.test.mjs`・`test/judgeEngine.test.mjs`の追加のみ。既存のゲームロジック・UIコードへの変更はない。
 - `node --test`で8件すべて合格することを確認済み。
 

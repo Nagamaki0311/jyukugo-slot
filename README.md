@@ -47,7 +47,7 @@
   - ゲーム本体の実装
 
 - test
-  - GameEngineの所持金・スコア関連ロジックの回帰テスト（`node --test`で実行、追加依存なし）
+  - `GameEngine`の所持金・スコア関連ロジック、`JudgeEngine`のスコア計算式に対する回帰テスト（`node --test`で実行、追加依存なし）
 
 ## テスト
 
@@ -55,7 +55,7 @@
 node --test
 ```
 
-ビルドツール・テストフレームワークは導入せず、Node.js標準の`node:test`のみを使う。現時点では`GameEngine`の所持金・スコア計算（`test/gameEngine.test.mjs`）のみ対象。
+ビルドツール・テストフレームワークは導入せず、Node.js標準の`node:test`のみを使う。現時点では`GameEngine`（所持金・スコア計算、`test/gameEngine.test.mjs`）と`JudgeEngine`（成立判定・スコア計算式、`test/judgeEngine.test.mjs`）が対象。
 
 ## 開発フロー
 
